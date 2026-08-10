@@ -1,0 +1,23 @@
+expected	iserror	code
+# Reading an `expected` cell as an error expectation.
+#
+#   expected  the cell, raw.
+#   iserror   JSON boolean: is it an error expectation?
+#   code      JSON string: the code it names ("" means "any code").
+#
+# The cell must be exactly `ERROR`, or start with `ERROR:`. A bare
+# startsWith('ERROR') test would read `ERRORS` as a failure expectation
+# and then never compare the parse result at all — a row that silently
+# tests nothing, which is worse than a row that fails.
+ERROR	true	""
+ERROR:	true	""
+ERROR:unexpected	true	"unexpected"
+ERROR:unterminated_string	true	"unterminated_string"
+ERROR:a:b	true	"a:b"
+ERRORS	false
+ERROR_LIST	false
+ERROR unexpected	false
+error:unexpected	false
+"ERROR"	false
+{"a":1}	false
+[]	false

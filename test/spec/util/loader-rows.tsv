@@ -1,0 +1,10 @@
+input	expected
+# This fixture is the loader's own shape test, so its layout is the
+# point: line 1 is this header, line 2 is this comment, and the rows
+# below sit on lines the loader test asserts by number. Do not reflow it.
+a	1
+
+#hash	2
+	3
+b\tc	4
+d	5	6
