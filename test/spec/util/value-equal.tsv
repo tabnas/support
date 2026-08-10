@@ -18,6 +18,15 @@ a	b	equal
 1000	1e3	true
 2.5	2.5	true
 0.1	0.2	false
+# A number beyond float64 range reads as Infinity, which is what
+# canonical JSON.parse answers. Go's encoding/json rejects the literal
+# outright, so these rows pin the workaround: get it wrong and the Go
+# runtime alone fails to LOAD the fixture.
+1e400	1e400	true
+1e400	1e999	true
+-1e400	-1e999	true
+1e400	-1e400	false
+1e400	1e308	false
 "x"	"x"	true
 "x"	"y"	false
 ""	""	true

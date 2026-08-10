@@ -290,6 +290,41 @@ func TestLoadSpecDirIgnoresNonTSV(t *testing.T) {
 	}
 }
 
+func TestLoadSpecDirIgnoresTSVNamedDirectory(t *testing.T) {
+	// Handing a directory to a file read aborts the run. The TypeScript
+	// loader used to do exactly that, so the same fixture tree worked in
+	// one runtime and not the other.
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "nested.tsv"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "real.tsv"), []byte("a\n1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	specs, err := LoadSpecDir(dir, nil)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	if 1 != len(specs) || "real.tsv" != specs[0].Name {
+		t.Errorf("got %d specs", len(specs))
+	}
+}
+
+func TestLoadSpecDirEmpty(t *testing.T) {
+	// The silent-pass failure mode one level up: a runner over an empty
+	// directory reports green having run nothing.
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "notes.md"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := LoadSpecDir(dir, nil)
+	if nil == err || !strings.Contains(err.Error(), "no .tsv fixtures") {
+		t.Errorf("err = %v", err)
+	}
+}
+
 func TestLoadSpecDirMissing(t *testing.T) {
 	_, err := LoadSpecDir(filepath.Join(specDir(t), "nosuchdir"), nil)
 	if nil == err || !strings.Contains(err.Error(), "spec directory not found") {

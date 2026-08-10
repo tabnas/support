@@ -218,6 +218,12 @@ func LoadSpecDir(dir string, opts *Options) ([]*File, error) {
 	}
 	sort.Strings(names)
 
+	// A directory with no fixtures in it is the silent-pass failure mode
+	// one level up: every runner over it reports green having run nothing.
+	if 0 == len(names) {
+		return nil, fmt.Errorf("no .tsv fixtures in spec directory: %s", dir)
+	}
+
 	specs := make([]*File, 0, len(names))
 	for _, name := range names {
 		spec, err := LoadSpec(filepath.Join(dir, name), opts)

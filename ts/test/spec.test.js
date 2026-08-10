@@ -198,6 +198,36 @@ describe('spec-dir', () => {
     }
   })
 
+  it('ignores a DIRECTORY whose name ends in .tsv', () => {
+    // Handing a directory to readFileSync aborts the run — and the Go
+    // loader skips it, so the same fixture tree would work there and not
+    // here.
+    const dir = Fs.mkdtempSync(Path.join(Os.tmpdir(), 'tabnas-support-'))
+    try {
+      Fs.mkdirSync(Path.join(dir, 'nested.tsv'))
+      Fs.writeFileSync(Path.join(dir, 'real.tsv'), 'a\n1\n')
+
+      const specs = loadSpecDir(dir)
+      assert.deepEqual(specs.map((s) => s.file), ['real.tsv'])
+    }
+    finally {
+      Fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('throws for a directory with no fixtures in it', () => {
+    // The silent-pass failure mode one level up: a runner over an empty
+    // directory reports green having run nothing.
+    const dir = Fs.mkdtempSync(Path.join(Os.tmpdir(), 'tabnas-support-'))
+    try {
+      Fs.writeFileSync(Path.join(dir, 'notes.md'), 'not a fixture')
+      assert.throws(() => loadSpecDir(dir), /no \.tsv fixtures/)
+    }
+    finally {
+      Fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('throws for a missing directory', () => {
     assert.throws(
       () => loadSpecDir(Path.join(SPEC, 'nosuchdir')),

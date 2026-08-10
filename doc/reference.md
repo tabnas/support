@@ -2,10 +2,17 @@
 
 The fixture format, and the full API in both runtimes side by side. The
 two are written to behave identically; where a difference is unavoidable
-it is marked **⚠ differs** and explained.
+it is marked **⚠ differs** and explained. There are five, and adding a
+sixth without documenting it silently breaks the guarantee the package
+exists to provide.
 
 - TypeScript: `@tabnas/support`, source in [`../ts/src/`](../ts/src/).
 - Go: `github.com/tabnas/support/go`, source in [`../go/`](../go/).
+
+Neither belongs in a release artifact: `@tabnas/support` is a
+`devDependency` imported only from `test/`, and its Go half is imported
+only from `_test.go` files. See
+[keeping it out of your build](../go/README.md#keeping-it-out-of-your-build).
 
 ## The fixture format
 
@@ -82,6 +89,24 @@ An empty `expected` cell means "no value".
 > **⚠ differs.** TypeScript reads an empty cell as `undefined` and `null`
 > as `null`; Go has no `undefined`, so both are `nil`. In a cross-runtime
 > fixture, write `null` explicitly rather than leaving the cell empty.
+
+### Numbers in the expected column
+
+Two limits, both inherited from the canonical runtime rather than
+invented here:
+
+- **Beyond float64 range reads as ±Infinity.** `1e400` is `Infinity`,
+  which is what `JSON.parse` answers. Go's `encoding/json` rejects the
+  literal outright, so `ParseExpect` re-reads such a cell keeping the
+  number as text and widens it with `strconv` — otherwise a fixture row
+  would run in TypeScript and fail to *load* in Go. `Infinity` compares
+  equal to itself, so an overflow row can be pinned.
+- **Integers beyond 2^53 are not exact, in either runtime.**
+  `JSON.parse('9007199254740993')` is `9007199254740992`, and Go reads it
+  the same way. Do not pin such an integer in a fixture and expect either
+  side to tell it from its neighbour. Making Go exact here would make it
+  *reject* rows TypeScript accepts, which is the divergence this package
+  exists to prevent.
 
 ## Escape codec API
 
@@ -161,10 +186,15 @@ convention the parser's option structs use. `Bool(false)` builds one.
 | `loadSpecDir(dir, options?)` | `LoadSpecDir(dir string, opts *Options) ([]*File, error)` |
 | `findSpecDir(from?)` | `FindSpecDir(from string) (string, error)` |
 
-`loadSpecDir` takes every `*.tsv` in a directory, sorted by name so both
-runtimes and successive runs visit them in the same order. Discovery by
-listing is deliberate: adding a fixture then runs it without editing a
-runner.
+`loadSpecDir` takes every `*.tsv` **file** in a directory, sorted by name
+so both runtimes and successive runs visit them in the same order.
+Discovery by listing is deliberate: adding a fixture then runs it without
+editing a runner. A directory whose own name ends in `.tsv` is skipped,
+not read as a file.
+
+A directory holding no `.tsv` files is an **error**, not an empty list.
+That is the silent-pass failure mode one level up: a runner over an empty
+directory reports green having run nothing.
 
 `findSpecDir` walks up from `from` until it finds a `test/spec` directory.
 This replaces the `join(__dirname, '..', '..', 'test', 'spec')` that every
@@ -200,9 +230,16 @@ directory under `npm test`.
   slice or string-keyed map compares by contents. The expected side always
   arrives from `encoding/json` as `float64`, while a grammar's result can
   be any numeric type; without this, every integer row would fail for the
-  Go runtime alone.
+  Go runtime alone. A map keyed by a *defined* string type
+  (`map[TokenName]any`) compares against a `map[string]any` expectation;
+  a `map[int]any` does not, however happily Go would convert the key.
 - A number is never a string, and a container of one kind is never a
   container of another — empty or not.
+- **Own keys only.** An object's inherited properties take no part: a
+  result keyed `constructor` or `valueOf` is compared as the ordinary key
+  it is, not matched against every object that inherits one. Relaxed
+  grammars parse those keys perfectly happily — that is what the
+  `funky-keys` fixtures are for.
 
 The `normalize` hook rewrites every node on both sides, outermost first.
 This is where a runtime-specific container — an insertion-ordered map, a
@@ -239,11 +276,21 @@ dependency on the parser.
 | `runner.file(path)` | `Runner.File(t, path)` | One fixture file. |
 | `runner.spec(spec)` | `Runner.Spec(t, spec)` | An already-loaded fixture. |
 | `runner.row(row, input, expected)` | `Runner.Row(t, row, input, expected)` | One row. |
+| `runner.checkSpec(spec)` | `Runner.CheckSpec(spec) error` | Nothing — reports whether a fixture *can* be run. |
 | — | `Runner.CheckRow(row, input, expected) error` | One row, returning the failure instead of reporting it. |
 
 An empty fixture and an empty directory both **fail**. A fixture that
 loads but holds nothing is a silent pass, and a silent pass is
 indistinguishable from coverage that was never there.
+
+`checkSpec` / `CheckSpec` is that guard, split out so it can be asserted:
+reporting through `node:test` or `*testing.T` cannot be caught by a test,
+so a guard that only ever failed a test could not itself be pinned. It
+also rejects a misspelt column name at registration time, rather than as
+one red case per row. `spec` / `Spec` calls it first.
+
+> **⚠ differs.** TypeScript's checks throw; Go's return an `error`. Same
+> split as `row` / `CheckRow`, and each is its language's convention.
 
 ## The adder grammar
 

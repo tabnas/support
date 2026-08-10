@@ -124,9 +124,17 @@ function deepEqual(
       return false
     }
     for (const k of ak) {
-      // `in`, not a truthiness test: an explicit `undefined` value is not
-      // the same as an absent key.
-      if (!(k in bm) || !deepEqual(am[k], bm[k], norm)) {
+      // `hasOwnProperty`, not `in`: `in` walks the prototype chain, so a
+      // result keyed `constructor` or `valueOf` would match ANY object —
+      // `{constructor: Object}` compared equal to `{x: 1}`. Relaxed
+      // grammars parse those keys perfectly happily (that is what the
+      // `funky-keys` fixtures are for), so this is reachable, and a false
+      // PASS is the worst kind.
+      //
+      // Own, not merely present: an explicit `undefined` value is still
+      // not the same as an absent key.
+      if (!Object.prototype.hasOwnProperty.call(bm, k) ||
+        !deepEqual(am[k], bm[k], norm)) {
         return false
       }
     }

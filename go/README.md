@@ -25,6 +25,35 @@ it end to end therefore lives in the separate [`adder`](adder/) module.
 go get github.com/tabnas/support/go@latest
 ```
 
+## Keeping it out of your build
+
+Go has no `devDependencies`. The equivalent guarantee comes from the
+**import graph**, not from metadata in `go.mod`:
+
+- **Import it only from `_test.go` files.** A package reached only from
+  test files is never linked into `go build` output — nothing from this
+  module, and nothing it pulls in (it imports `testing`), reaches a
+  production binary.
+- **It stays out of your consumers' build lists too.** Since Go 1.17,
+  module graph pruning means the test-only dependencies of a dependency
+  are not loaded for anyone downstream. A package that imports *your*
+  module does not acquire this one.
+- **It does appear in your `go.mod` and `go.sum`,** as a `require` line.
+  That is unavoidable and harmless: it is a record of what your tests
+  need, not of what your binary contains.
+
+The rule is checkable, so check it rather than trusting it. `go list
+-deps` walks the **non-test** import graph, so this must print nothing:
+
+```bash
+go list -deps ./... | grep -x 'github.com/tabnas/support/go' && \
+  echo 'LEAKED into the build graph' && exit 1
+```
+
+Worth a CI step in every consuming repo: the day someone imports the
+loader from `src`-side code to save a few lines, that line turns red
+instead of quietly shipping `testing` inside a release binary.
+
 ## Use
 
 ```go

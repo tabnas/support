@@ -63,6 +63,12 @@ Write `null` rather than leaving a cell empty when the value really is
 null. An empty cell means "no value", and TypeScript reads that as
 `undefined` while Go — which has no `undefined` — reads it as `nil`.
 
+Two things to know about numbers in an expected cell: one beyond float64
+range (`1e400`) reads as `Infinity` in both runtimes, and an integer
+beyond 2^53 is **inexact** in both — `9007199254740993` reads as
+`...992`, so do not pin one and expect either side to tell it from its
+neighbour. See [`doc/reference.md`](../doc/reference.md).
+
 ## Who runs what
 
 | Fixture | TypeScript | Go |

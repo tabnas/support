@@ -4,9 +4,12 @@ package tabnassupport
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"math"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -61,17 +64,88 @@ func ErrorCode(expected string) (string, error) {
 // nil — Go has no separate undefined. A cross-runtime fixture should
 // therefore write "null" rather than leaving the cell empty when the value
 // really is null.
+//
+// A number too large for float64 (1e400) becomes ±Inf, matching what
+// canonical JSON.parse produces. encoding/json rejects it outright, which
+// would mean a fixture row that runs in TypeScript and fails to load at
+// all in Go — a divergence introduced by this package, in the one place
+// it least belongs. A JSON parser's own fixtures reach here: the
+// must-accept half of nst/JSONTestSuite includes numbers that overflow.
+//
+// What neither runtime can do is carry an integer beyond 2^53 exactly;
+// JSON.parse reads 9007199254740993 as ...992 and so does this. That
+// limit is the canonical runtime's, so it is shared rather than papered
+// over — do not pin such an integer in a fixture and expect either side
+// to tell it from its neighbour.
 func ParseExpect(expected string) (any, error) {
 	if "" == expected {
 		return nil, nil
 	}
 
 	var val any
-	if err := json.Unmarshal([]byte(expected), &val); err != nil {
-		return nil, fmt.Errorf("invalid expected JSON: %q: %w", expected, err)
+	err := json.Unmarshal([]byte(expected), &val)
+	if nil == err {
+		return val, nil
 	}
 
-	return val, nil
+	// Retry with the numbers left as text, which is the only way to tell
+	// "out of float64 range" from "not JSON at all". Everything else
+	// fails again here, with the same message it would have had.
+	if val, ok := parseOverflowing(expected); ok {
+		return val, nil
+	}
+
+	return nil, fmt.Errorf("invalid expected JSON: %q: %w", expected, err)
+}
+
+// parseOverflowing re-reads a cell keeping numbers as text, then widens
+// each one with strconv, which answers ±Inf for an out-of-range literal
+// instead of failing. It reports false for anything that is not valid
+// JSON, so the caller's original error is what the user sees.
+func parseOverflowing(expected string) (any, bool) {
+	dec := json.NewDecoder(strings.NewReader(expected))
+	dec.UseNumber()
+
+	var raw any
+	if err := dec.Decode(&raw); err != nil {
+		return nil, false
+	}
+
+	// Decode stops at the end of the first value; Unmarshal does not.
+	// Without this, trailing content ("1 2") would be accepted here after
+	// being rejected above.
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
+		return nil, false
+	}
+
+	return widenNumbers(raw), true
+}
+
+// widenNumbers converts the json.Number values left by UseNumber into
+// float64, taking strconv's ±Inf for an out-of-range literal. A number
+// that is not parseable at all cannot occur — the decoder already
+// validated it as JSON.
+func widenNumbers(v any) any {
+	switch val := v.(type) {
+	case json.Number:
+		f, err := strconv.ParseFloat(val.String(), 64)
+		if err != nil && !errors.Is(err, strconv.ErrRange) {
+			return val.String()
+		}
+		return f
+	case map[string]any:
+		for k, e := range val {
+			val[k] = widenNumbers(e)
+		}
+		return val
+	case []any:
+		for i, e := range val {
+			val[i] = widenNumbers(e)
+		}
+		return val
+	default:
+		return v
+	}
 }
 
 // EqualValue compares two values with JSON semantics: structural,
@@ -151,11 +225,30 @@ func equalValue(a, b any, norm func(any) any) bool {
 		if ra.Len() != rb.Len() {
 			return false
 		}
+
+		// The key must be assignable to the other map's key type before
+		// MapIndex sees it — reflect PANICS otherwise, which in a test
+		// binary takes down the whole run instead of failing one row. A
+		// grammar keying on a defined string type (`map[TokenName]any`)
+		// against a JSON expectation (`map[string]any`) reaches exactly
+		// that, so convert when the kinds allow it and miss when they
+		// do not.
+		bkey := rb.Type().Key()
 		for _, k := range ra.MapKeys() {
-			// Key equality is by the key's own value, so map[string]any
-			// and map[string]int compare on their contents. A key type
-			// mismatch simply misses.
-			bval := rb.MapIndex(k)
+			// The converted key indexes the OTHER map; `k` itself still
+			// has to index its own.
+			bk := k
+			if !k.Type().AssignableTo(bkey) {
+				// Kinds must match as well as convert: Go will happily
+				// convert an int to a string (as a rune), and a
+				// map[int]any is not a map[string]any by any reading.
+				if k.Kind() != bkey.Kind() || !k.Type().ConvertibleTo(bkey) {
+					return false
+				}
+				bk = k.Convert(bkey)
+			}
+
+			bval := rb.MapIndex(bk)
 			if !bval.IsValid() {
 				return false
 			}

@@ -59,6 +59,38 @@ Both runtimes expose the same four things:
 - **The runner.** Fixture rows in, `node:test` / `*testing.T` subtests
   out, with the file and line in every failure message.
 
+## Depending on it without shipping it
+
+This is test-support code; it should never reach a release artifact.
+
+**TypeScript** — install it as a `devDependency` and import it only from
+`test/`, so it is neither installed by consumers nor reachable from
+`dist/`.
+
+**Go** has no `devDependencies`, and does not need them: the guarantee
+comes from the **import graph** instead of from metadata.
+
+- Import it only from `_test.go` files. A package reached only from test
+  files is never linked into `go build` output — not this module, and not
+  the `testing` package it pulls in.
+- Since Go 1.17, module graph pruning keeps a dependency's *test-only*
+  dependencies out of everyone downstream, so importing your module does
+  not give anyone this one.
+- It does appear as a `require` line in your `go.mod`. That records what
+  your tests need, not what your binary contains.
+
+The rule is checkable, so check it — `go list -deps` walks the non-test
+graph, so this prints nothing in a healthy repo:
+
+```bash
+go list -deps ./... | grep -x 'github.com/tabnas/support/go' && \
+  echo 'LEAKED into the build graph' && exit 1
+```
+
+`go/adder` is a working demonstration: it uses the support module from
+`adder_test.go` only, and neither the module nor `testing` appears in its
+non-test import graph.
+
 ## Quick start
 
 TypeScript:

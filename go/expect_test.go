@@ -84,9 +84,77 @@ func TestParseExpect(t *testing.T) {
 }
 
 func TestParseExpectBadJSON(t *testing.T) {
-	_, err := ParseExpect("{oops")
-	if nil == err || !strings.Contains(err.Error(), "invalid expected JSON") {
-		t.Errorf("err = %v", err)
+	for _, cell := range []string{
+		"{oops", "1 2", "[1,", "nope", `"unterminated`, "",
+	} {
+		if "" == cell {
+			continue // An empty cell is "no value", not bad JSON.
+		}
+		_, err := ParseExpect(cell)
+		if nil == err || !strings.Contains(err.Error(), "invalid expected JSON") {
+			t.Errorf("ParseExpect(%q): err = %v", cell, err)
+		}
+	}
+}
+
+// TestParseExpectOverflow pins the behaviour canonical JSON.parse has:
+// a number beyond float64 range reads as ±Inf. encoding/json rejects the
+// literal outright, so ParseExpect goes out of its way to match — a
+// fixture row that runs in TypeScript must not fail to LOAD in Go, which
+// would be a divergence introduced by this package in the one place it
+// least belongs.
+func TestParseExpectOverflow(t *testing.T) {
+	cases := []struct {
+		cell string
+		want any
+	}{
+		{"1e400", math.Inf(1)},
+		{"-1e400", math.Inf(-1)},
+		{"1e999", math.Inf(1)},
+		{"[1e400]", []any{math.Inf(1)}},
+		{`{"a":1e400}`, map[string]any{"a": math.Inf(1)}},
+		{`{"a":[1,1e400]}`, map[string]any{"a": []any{float64(1), math.Inf(1)}}},
+
+		// Nothing else changes: the ordinary path is untouched.
+		{"1", float64(1)},
+		{`{"a":1}`, map[string]any{"a": float64(1)}},
+	}
+
+	for _, c := range cases {
+		got, err := ParseExpect(c.cell)
+		if err != nil {
+			t.Errorf("ParseExpect(%q): %v", c.cell, err)
+			continue
+		}
+		if !EqualValue(got, c.want) {
+			t.Errorf("ParseExpect(%q) = %v, want %v", c.cell, got, c.want)
+		}
+	}
+
+	// Infinity compares equal to itself, so an overflow row can be pinned
+	// in a fixture at all.
+	inf, _ := ParseExpect("1e400")
+	other, _ := ParseExpect("1e999")
+	if !EqualValue(inf, other) {
+		t.Error("Inf should equal Inf")
+	}
+	if EqualValue(inf, math.Inf(-1)) {
+		t.Error("+Inf should not equal -Inf")
+	}
+}
+
+// TestParseExpectBigInteger records a limit rather than a behaviour: the
+// canonical runtime reads 9007199254740993 as ...992 and so does this, so
+// neither side can tell such an integer from its neighbour. Pinning Go to
+// exact integers would make it REJECT rows TypeScript accepts, which is
+// the divergence this package exists to prevent.
+func TestParseExpectBigInteger(t *testing.T) {
+	got, err := ParseExpect("9007199254740993")
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	if want := float64(9007199254740992); got != want {
+		t.Errorf("got %v, want %v", got, want)
 	}
 }
 
@@ -171,6 +239,41 @@ func TestEqualValueAcrossGoTypes(t *testing.T) {
 
 	for _, c := range cases {
 		if got := EqualValue(c.got, c.want); got != c.equal {
+			t.Errorf("EqualValue(%#v, %#v) = %v, want %v",
+				c.got, c.want, got, c.equal)
+		}
+	}
+}
+
+// TestEqualValueDefinedKeyType covers the reflect hazard: MapIndex PANICS
+// when handed a key that is not assignable to the other map's key type,
+// which in a test binary takes down the whole run instead of failing one
+// row. A grammar keying on a defined string type reaches exactly that.
+func TestEqualValueDefinedKeyType(t *testing.T) {
+	type tokenName string
+	type otherName string
+	type tokenID int
+
+	cases := []struct {
+		got, want any
+		equal     bool
+	}{
+		{map[tokenName]any{"a": 1}, map[string]any{"a": float64(1)}, true},
+		{map[string]any{"a": float64(1)}, map[tokenName]any{"a": 1}, true},
+		{map[tokenName]any{"a": 1}, map[otherName]any{"a": 1}, true},
+		{map[tokenName]any{"a": 1}, map[string]any{"a": float64(2)}, false},
+		{map[tokenName]any{"a": 1}, map[string]any{"b": float64(1)}, false},
+
+		// Go will convert an int to a string (as a rune), which would
+		// make map[tokenID]any silently index a map[string]any. Kinds
+		// have to match, not merely convert.
+		{map[tokenID]any{97: 1}, map[string]any{"a": float64(1)}, false},
+		{map[string]any{"a": float64(1)}, map[tokenID]any{97: 1}, false},
+	}
+
+	for _, c := range cases {
+		got := EqualValue(c.got, c.want)
+		if got != c.equal {
 			t.Errorf("EqualValue(%#v, %#v) = %v, want %v",
 				c.got, c.want, got, c.equal)
 		}

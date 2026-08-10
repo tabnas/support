@@ -18,6 +18,12 @@ those fixtures prove nothing.
 npm install --save-dev @tabnas/support
 ```
 
+**A devDependency, always** — and, just as importantly, imported only from
+`test/`. `--save-dev` keeps it out of a consumer's install; importing it
+only from test files keeps it out of the published `dist/`. The Go half
+has the same rule for the same reason, enforced by the import graph rather
+than by metadata — see [`go/README.md`](../go/README.md#keeping-it-out-of-your-build).
+
 `@tabnas/parser` is an optional peer dependency, needed only for the
 [adder grammar](#the-adder-grammar).
 

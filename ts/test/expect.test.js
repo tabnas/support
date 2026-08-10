@@ -61,6 +61,23 @@ describe('expect-parse', () => {
 
   it('names the offending cell when the JSON is bad', () => {
     assert.throws(() => parseExpect('{oops'), /invalid expected JSON/)
+    assert.throws(() => parseExpect('1 2'), /invalid expected JSON/)
+  })
+
+  it('reads a number beyond float range as Infinity', () => {
+    // JSON.parse's own answer. Go's encoding/json rejects the literal
+    // outright, so `go/expect.go` goes out of its way to match this —
+    // a JSON parser's own fixtures reach here.
+    assert.equal(parseExpect('1e400'), Infinity)
+    assert.equal(parseExpect('-1e400'), -Infinity)
+    assert.deepEqual(parseExpect('[1e400]'), [Infinity])
+    assert.deepEqual(parseExpect('{"a":1e400}'), { a: Infinity })
+  })
+
+  it('cannot tell integers beyond 2^53 apart, and says so', () => {
+    // A canonical-runtime limit, shared rather than papered over: Go
+    // rounds the same way, so a fixture must not pin such an integer.
+    assert.equal(parseExpect('9007199254740993'), 9007199254740992)
   })
 })
 
@@ -96,6 +113,26 @@ describe('expect-equal', () => {
   it('separates an absent key from an explicit undefined', () => {
     assert.equal(equalValue({ a: undefined }, {}), false)
     assert.equal(equalValue({ a: undefined }, { a: undefined }), true)
+  })
+
+  it('compares own keys only, not inherited ones', () => {
+    // `k in obj` walks the prototype chain, so a result keyed
+    // `constructor` or `valueOf` would match ANY object of the same size.
+    // Relaxed grammars parse those keys perfectly happily — that is what
+    // the `funky-keys` fixtures are for — so this is reachable, and a
+    // false PASS is the worst kind.
+    assert.equal(equalValue({ constructor: Object }, { x: 1 }), false)
+    assert.equal(equalValue({ valueOf: 1 }, { x: 1 }), false)
+    assert.equal(equalValue({ toString: 1 }, { hasOwnProperty: 1 }), false)
+
+    // The keys themselves still compare normally.
+    assert.equal(equalValue({ constructor: 1 }, { constructor: 1 }), true)
+    assert.equal(equalValue({ constructor: 1 }, { constructor: 2 }), false)
+
+    // And an object with no prototype at all behaves the same.
+    const bare = Object.create(null)
+    bare.a = 1
+    assert.equal(equalValue(bare, { a: 1 }), true)
   })
 
   it('applies a normalize hook to both sides, at every depth', () => {

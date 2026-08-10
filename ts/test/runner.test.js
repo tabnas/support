@@ -12,6 +12,9 @@
 
 const { describe, it } = require('node:test')
 const assert = require('node:assert')
+const Fs = require('node:fs')
+const Os = require('node:os')
+const Path = require('node:path')
 
 const {
   SpecRunner, makeRunner, parseSpec,
@@ -143,6 +146,39 @@ describe('runner', () => {
   it('names a missing parse function at construction', () => {
     assert.throws(() => makeRunner({}), /options.parse is required/)
     assert.throws(() => makeRunner(), /options.parse is required/)
+  })
+
+  it('refuses a fixture with no cases', () => {
+    // The silent-pass path. A fixture that loads but holds nothing runs
+    // no assertions, and a runner that reported green over it would hide
+    // every other failure this suite exists to catch.
+    const runner = makeRunner({ parse: (s) => s })
+    const empty = parseSpec('empty.tsv', 'input\texpected\n')
+
+    assert.equal(empty.rows.length, 0)
+    assert.throws(() => runner.checkSpec(empty), /empty\.tsv: no cases/)
+    assert.throws(() => runner.spec(empty), /empty\.tsv: no cases/)
+  })
+
+  it('refuses a fixture whose named column is not there', () => {
+    // Registration-time, not one red case per row: a misspelt column
+    // name is a defect in the suite, not in the fixture.
+    const runner = makeRunner({ parse: (s) => s, input: 'nosuch' })
+    assert.throws(
+      () => runner.spec(parseSpec('n.tsv', 'input\texpected\na\t"A"')),
+      /no column named 'nosuch'/)
+  })
+
+  it('refuses a directory with no fixtures in it', () => {
+    const dir = Fs.mkdtempSync(Path.join(Os.tmpdir(), 'tabnas-support-'))
+    try {
+      Fs.writeFileSync(Path.join(dir, 'notes.md'), 'not a fixture')
+      const runner = makeRunner({ parse: (s) => s })
+      assert.throws(() => runner.dir(dir), /no \.tsv fixtures/)
+    }
+    finally {
+      Fs.rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   it('names the row for a bad expected cell', () => {

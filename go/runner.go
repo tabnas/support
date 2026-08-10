@@ -56,12 +56,11 @@ type Runner struct {
 func (r Runner) Dir(t *testing.T, dir string) {
 	t.Helper()
 
+	// LoadSpecDir rejects a directory with no fixtures in it, so a run
+	// that would have been green having done nothing fails here instead.
 	specs, err := LoadSpecDir(dir, r.Load)
 	if err != nil {
 		t.Fatalf("%v", err)
-	}
-	if 0 == len(specs) {
-		t.Fatalf("%s: no .tsv fixtures", dir)
 	}
 
 	for _, spec := range specs {
@@ -86,21 +85,12 @@ func (r Runner) Spec(t *testing.T, spec *File) {
 	t.Helper()
 
 	t.Run("spec: "+spec.Name, func(t *testing.T) {
-		// A fixture that loads but holds nothing is a silent pass, and a
-		// silent pass is indistinguishable from coverage that was never
-		// there. Fail instead.
-		if 0 == len(spec.Rows) {
-			t.Fatalf("%s: no cases", spec.Name)
+		if err := r.CheckSpec(spec); err != nil {
+			t.Fatalf("%v", err)
 		}
 
-		inCol, err := r.column(spec, r.Input, r.InputName, 0)
-		if err != nil {
-			t.Fatalf("%s: input column: %v", spec.Name, err)
-		}
-		outCol, err := r.column(spec, r.Expected, r.ExpectedName, 1)
-		if err != nil {
-			t.Fatalf("%s: expected column: %v", spec.Name, err)
-		}
+		inCol, _ := r.column(spec, r.Input, r.InputName, 0)
+		outCol, _ := r.column(spec, r.Expected, r.ExpectedName, 1)
 
 		for _, row := range spec.Rows {
 			input := row.Unesc(inCol)
@@ -118,6 +108,28 @@ func (r Runner) Spec(t *testing.T, spec *File) {
 			})
 		}
 	})
+}
+
+// CheckSpec reports why a fixture cannot be run, or nil when it can.
+// Spec calls it and fails the test; it is exported so the guard itself
+// can be asserted, which reporting through *testing.T does not allow.
+//
+// A fixture that loads but holds no rows is the case that matters: it is
+// a silent pass, and a silent pass is indistinguishable from coverage
+// that was never there.
+func (r Runner) CheckSpec(spec *File) error {
+	if 0 == len(spec.Rows) {
+		return fmt.Errorf("%s: no cases", spec.Name)
+	}
+
+	if _, err := r.column(spec, r.Input, r.InputName, 0); err != nil {
+		return fmt.Errorf("%s: input column: %w", spec.Name, err)
+	}
+	if _, err := r.column(spec, r.Expected, r.ExpectedName, 1); err != nil {
+		return fmt.Errorf("%s: expected column: %w", spec.Name, err)
+	}
+
+	return nil
 }
 
 // Row runs one row and reports any failure on t.

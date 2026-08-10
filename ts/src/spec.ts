@@ -214,10 +214,22 @@ export function loadSpecDir(dir: string, options?: SpecOptions): SpecFile[] {
   if (!existsSync(dir) || !statSync(dir).isDirectory()) {
     throw new Error('spec directory not found: ' + dir)
   }
-  return readdirSync(dir)
-    .filter((name) => name.endsWith('.tsv'))
+
+  const names = readdirSync(dir, { withFileTypes: true })
+    // Files only. A DIRECTORY named `foo.tsv` would otherwise be handed
+    // to readFileSync and abort the run — and the Go loader skips it, so
+    // the same fixture tree would work there and not here.
+    .filter((e) => e.isFile() && e.name.endsWith('.tsv'))
+    .map((e) => e.name)
     .sort()
-    .map((name) => loadSpec(join(dir, name), options))
+
+  // A directory with no fixtures in it is the silent-pass failure mode
+  // one level up: every runner over it reports green having run nothing.
+  if (0 === names.length) {
+    throw new Error('no .tsv fixtures in spec directory: ' + dir)
+  }
+
+  return names.map((name) => loadSpec(join(dir, name), options))
 }
 
 

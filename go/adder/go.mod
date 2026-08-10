@@ -9,9 +9,15 @@ module github.com/tabnas/support/go/adder
 
 go 1.24.7
 
+// The support requirement is a REAL published version, not a v0.0.0
+// placeholder. The replace below is what the local build uses, but a
+// replace in a dependency module is ignored by whoever imports it — an
+// external `go get` of this module would try to resolve the version named
+// here, and a placeholder would fail before anything compiled. Bump it
+// with the support module's version at every release (`make publish-go`).
 require (
 	github.com/tabnas/parser/go v0.8.0
-	github.com/tabnas/support/go v0.0.0
+	github.com/tabnas/support/go v0.1.0
 )
 
 replace github.com/tabnas/support/go => ../

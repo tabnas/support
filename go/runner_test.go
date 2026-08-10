@@ -196,6 +196,57 @@ func TestRunnerUnknownColumnName(t *testing.T) {
 	}
 }
 
+func TestRunnerCheckSpecEmpty(t *testing.T) {
+	// The silent-pass path. A fixture that loads but holds nothing runs
+	// no assertions, and a runner that reported green over it would hide
+	// every other failure this suite exists to catch. CheckSpec is
+	// exported precisely so the guard can be asserted — reporting through
+	// *testing.T cannot be.
+	r := Runner{Parse: func(s string) (any, error) { return s, nil }}
+	empty := mustParse(t, "empty.tsv", "input\texpected\n", nil)
+
+	if 0 != len(empty.Rows) {
+		t.Fatalf("rows: %d", len(empty.Rows))
+	}
+
+	err := r.CheckSpec(empty)
+	if nil == err || !strings.Contains(err.Error(), "empty.tsv: no cases") {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestRunnerCheckSpecUnknownColumn(t *testing.T) {
+	spec := mustParse(t, "n.tsv", "input\texpected\na\t\"A\"", nil)
+
+	in := Runner{
+		Parse:     func(s string) (any, error) { return s, nil },
+		InputName: "nosuch",
+	}
+	if err := in.CheckSpec(spec); nil == err ||
+		!strings.Contains(err.Error(), "input column") {
+		t.Errorf("err = %v", err)
+	}
+
+	out := Runner{
+		Parse:        func(s string) (any, error) { return s, nil },
+		ExpectedName: "nosuch",
+	}
+	if err := out.CheckSpec(spec); nil == err ||
+		!strings.Contains(err.Error(), "expected column") {
+		t.Errorf("err = %v", err)
+	}
+
+	// A fixture that IS runnable passes the same check.
+	ok := Runner{
+		Parse:        func(s string) (any, error) { return s, nil },
+		InputName:    "input",
+		ExpectedName: "expected",
+	}
+	if err := ok.CheckSpec(spec); err != nil {
+		t.Errorf("err = %v", err)
+	}
+}
+
 func TestRunnerColumnDefaults(t *testing.T) {
 	// The default is column 0 for input and column 1 for expected — and an
 	// explicit column 0 for expected must stay column 0, which is why the

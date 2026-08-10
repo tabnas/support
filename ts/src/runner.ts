@@ -66,21 +66,31 @@ export class SpecRunner {
     this.options = options
   }
 
+  // Throw if a fixture cannot be run. `spec` calls this before it
+  // registers anything, so an unusable fixture fails loudly at once
+  // rather than as one red case among the rest.
+  //
+  // A fixture that loads but holds no rows is the case that matters: it
+  // is a silent pass, and a silent pass is indistinguishable from
+  // coverage that was never there.
+  checkSpec(spec: SpecFile): void {
+    if (0 === spec.rows.length) {
+      throw new Error(spec.file + ': no cases')
+    }
+
+    const probe = spec.rows[0]
+    probe.resolve(this.options.input ?? 0)
+    probe.resolve(this.options.expected ?? 1)
+  }
+
   // Run every row of an already-loaded fixture, inside a `describe` block
   // named for the file.
   spec(spec: SpecFile): void {
     const opts = this.options
 
-    describe('spec: ' + spec.file, () => {
-      // A fixture that loads but holds nothing is a silent pass, and a
-      // silent pass is indistinguishable from coverage that was never
-      // there. Fail instead.
-      it('has cases', () => {
-        if (0 === spec.rows.length) {
-          throw new Error(spec.file + ': no cases')
-        }
-      })
+    this.checkSpec(spec)
 
+    describe('spec: ' + spec.file, () => {
       for (const row of spec.rows) {
         const input = row.unesc(row.resolve(opts.input ?? 0))
         const expected = row.col(row.resolve(opts.expected ?? 1))
@@ -161,20 +171,11 @@ export class SpecRunner {
     this.spec(loadSpec(path, this.options.spec))
   }
 
-  // Load and run every `*.tsv` in a directory. An empty directory fails:
-  // a runner that finds nothing to run must not report green.
+  // Load and run every `*.tsv` in a directory. `loadSpecDir` rejects a
+  // directory with no fixtures in it, so a run that would have been
+  // green having done nothing throws here instead.
   dir(dir: string): void {
-    const specs = loadSpecDir(dir, this.options.spec)
-
-    describe('spec dir: ' + dir, () => {
-      it('has fixtures', () => {
-        if (0 === specs.length) {
-          throw new Error(dir + ': no .tsv fixtures')
-        }
-      })
-    })
-
-    for (const spec of specs) {
+    for (const spec of loadSpecDir(dir, this.options.spec)) {
       this.spec(spec)
     }
   }

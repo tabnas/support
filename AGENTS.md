@@ -43,12 +43,31 @@ sides already matched.
    by importing `*tabnas.TabnasError`.
 3. **A behaviour difference between the runtimes is a defect until it is
    documented.** The unavoidable ones are marked **⚠ differs** in
-   `doc/reference.md`; there are four, and each says why. Adding a fifth
+   `doc/reference.md`; there are five, and each says why. Adding a sixth
    without documenting it silently breaks the guarantee the package
    exists to provide.
+
+   Some differences are worth *code* to erase rather than a note: Go's
+   `ParseExpect` re-reads an out-of-range number so `1e400` gives ±Inf
+   like `JSON.parse`, because otherwise a fixture row would run in one
+   runtime and fail to load in the other. Others are the canonical
+   runtime's own limits and are shared rather than papered over —
+   integers beyond 2^53 are inexact in both, and making Go exact would
+   make it *reject* rows TypeScript accepts.
 4. **The version is one number.** `ts/package.json`, `ts/src/support.ts`
    (`VERSION`) and `go/support.go` (`VERSION`) must agree; the version
    test in each runtime fails the build when they drift.
+   `go/adder/go.mod`'s `require` on the support module is a fourth place
+   the number appears — it must name a real published version, because a
+   `replace` in a dependency module is ignored by whoever imports it.
+   `make publish-go` updates it and refuses to run when `ts/` has not
+   been bumped first.
+5. **This is test-support code and must never reach a release
+   artifact.** In TypeScript that means a `devDependency` imported only
+   from `test/`; in Go it means importing it only from `_test.go` files,
+   which the import graph then enforces — see
+   `go/README.md#keeping-it-out-of-your-build` for the `go list -deps`
+   check that consuming repos should run in CI.
 
 ## Testing rules
 
@@ -56,14 +75,16 @@ sides already matched.
   `ts/`, `go/` and `go/adder/`.
 - **An empty fixture and an empty fixture directory must fail.** A fixture
   that loads but holds nothing is a silent pass, and a silent pass is
-  indistinguishable from coverage that was never there. Both runners
-  assert this, and `ts/test/runner.test.js` / `go/runner_test.go` assert
-  that the runner itself fails when it should — a runner that quietly
-  passes is the one bug that hides every other one.
-- The runner tests drive the failing path through `CheckRow` (Go) and
-  `runner.row` (TS), which return or throw the failure rather than
-  reporting it, so a failing case can be asserted without failing the
-  suite.
+  indistinguishable from coverage that was never there. The empty
+  directory is rejected by `loadSpecDir` / `LoadSpecDir`; the empty
+  fixture by `checkSpec` / `CheckSpec`.
+- **A guard that can only fail a test cannot be tested.** That is why
+  both of those are ordinary functions that throw or return an error,
+  rather than checks buried in a `t.Fatalf` or an `it()` — and why the
+  per-row comparison is `CheckRow` (Go) / `runner.row` (TS). Every one of
+  them has a test asserting it fails when it should. A runner that
+  quietly passes is the one bug that hides every other one, so no guard
+  here is allowed to be unassertable.
 
 ## The mini plugin
 
