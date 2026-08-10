@@ -47,6 +47,17 @@ It has two jobs:
   one appears, move it upstream as a `go-test-dirs` input rather than
   copying it.
 
+  It sets `cache: false` on `setup-go`. The cache step looks for a
+  `go.mod` in `$GITHUB_WORKSPACE` — non-recursively, and without walking
+  up — and `checkout` puts the repo one level down, so it finds nothing
+  and annotates every run with "Restore cache failed". setup-go catches
+  that and carries on, so it is a warning rather than a failure (the
+  shared workflow's own go job has the same shape and runs fine), but a
+  warning that cries wolf on every run is how the real ones get ignored.
+  There is little to cache in any case: the support module has no
+  dependencies, `go/adder/go.sum` pins exactly one, and the workspace
+  overrides it with sibling source.
+
 ## Note
 
 Most CI behaviour (the OS matrix, Node and Go versions, `core.autocrlf

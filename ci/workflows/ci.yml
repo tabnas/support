@@ -5,6 +5,10 @@
 #
 # Org-standard thin caller, plus one repo-specific job the shared
 # workflow cannot cover — see the go-adder job below.
+#
+# Action refs are version tags for readability; Renovate
+# (helpers:pinGitHubActionDigests, via this repo's renovate.json) pins
+# them to commit SHAs automatically, as it did for the shared workflow.
 name: ci
 
 on:
@@ -47,10 +51,21 @@ jobs:
         with:
           path: support
 
+      # cache: false is deliberate. setup-go's cache step looks for a
+      # go.mod in $GITHUB_WORKSPACE — non-recursively, no parent walk —
+      # and checkout puts this repo one level down, so it finds nothing
+      # and annotates every run with "Restore cache failed". That is a
+      # warning, not a failure (setup-go catches it), but a warning that
+      # cries wolf on every run is how the real ones get ignored.
+      #
+      # There is also next to nothing to cache: the support module has no
+      # dependencies at all, and go/adder/go.sum pins exactly one. The
+      # workspace below overrides it with sibling source regardless.
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: "1.24"
+          cache: false
 
       # Cloned as a sibling and wired in through the workspace below, so
       # the adder grammar is tested against parser SOURCE rather than the
