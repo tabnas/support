@@ -158,7 +158,12 @@ including the parser it is used to test.
 ```bash
 make build   # both runtimes
 make test    # both runtimes, including the adder module
+make vet     # go vet over both Go modules
 ```
+
+CI is staged in [`ci/workflows/ci.yml`](ci/README.md) and **not yet
+promoted** — workflow files are moved into `.github/` by a maintainer, so
+until that happens nothing here runs on push or PR.
 
 ## License
 
