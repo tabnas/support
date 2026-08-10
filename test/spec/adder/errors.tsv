@@ -1,0 +1,13 @@
+input	expected
+# Input the adder grammar must reject, and the code it must reject with.
+# The code is part of the contract, not just "it threw": two runtimes that
+# reject the same source for different reasons have not agreed on anything.
+1+	ERROR:unexpected
+1+2+	ERROR:unexpected
++1	ERROR:unexpected
+++	ERROR:unexpected
+1++2	ERROR:unexpected
+1 2	ERROR:unexpected
+a	ERROR:unexpected
+1+a	ERROR:unexpected
+1+2 3	ERROR:unexpected

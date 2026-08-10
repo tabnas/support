@@ -1,0 +1,29 @@
+source	value	escaped
+# The escape codec, in both directions.
+#
+#   source   a cell exactly as it appears in a fixture file (raw).
+#   value    JSON of unescape(source) — the string a parser would receive.
+#   escaped  JSON of escape(value) — the canonical way to write it back.
+#
+# `value` and `escaped` are JSON because the decoded text contains the
+# very characters a TSV cell cannot hold; JSON's own escapes carry them.
+# Where `source` is already canonical, `escaped` decodes back to it.
+plain	"plain"	"plain"
+a\nb	"a\nb"	"a\\nb"
+a\rb	"a\rb"	"a\\rb"
+a\tb	"a\tb"	"a\\tb"
+a\r\nb	"a\r\nb"	"a\\r\\nb"
+\n	"\n"	"\\n"
+\t\t	"\t\t"	"\\t\\t"
+a\\b	"a\\b"	"a\\\\b"
+# `\\n` is an escaped backslash followed by a literal n — NOT a newline.
+# Decoding left to right is what keeps those two apart.
+a\\nb	"a\\nb"	"a\\\\nb"
+# An unrecognised escape passes through untouched, so a fixture can carry
+# its own backslashes (a regex, a JSON escape, a Windows path) unquoted.
+a\qb	"a\\qb"	"a\\\\qb"
+\d+	"\\d+"	"\\\\d+"
+C:\dir\file	"C:\\dir\\file"	"C:\\\\dir\\\\file"
+# A lone trailing backslash has nothing to escape and stays as it is.
+back\	"back\\"	"back\\\\"
+	""	""

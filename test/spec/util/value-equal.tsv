@@ -1,0 +1,62 @@
+a	b	equal
+# Comparing a parse result against an expected value: structural, and
+# key-order independent, with JSON's number semantics rather than the
+# host language's.
+#
+#   a, b    JSON values.
+#   equal   JSON boolean: must equalValue(a, b) hold?
+1	1	true
+1	2	false
+# Zero has one value here, however the runtime spells it. The expected
+# column is written with JavaScript JSON.stringify semantics, which
+# renders -0 as 0, so a Go result of -0 must still match.
+0	-0	true
+-0	-0	true
+# A number is a number whatever its notation, and whatever integer or
+# floating-point type the runtime picked to hold it.
+1.0	1	true
+1000	1e3	true
+2.5	2.5	true
+0.1	0.2	false
+# A number beyond float64 range reads as Infinity, which is what
+# canonical JSON.parse answers. Go's encoding/json rejects the literal
+# outright, so these rows pin the workaround: get it wrong and the Go
+# runtime alone fails to LOAD the fixture.
+1e400	1e400	true
+1e400	1e999	true
+-1e400	-1e999	true
+1e400	-1e400	false
+1e400	1e308	false
+"x"	"x"	true
+"x"	"y"	false
+""	""	true
+true	true	true
+true	false	false
+false	false	true
+null	null	true
+null	0	false
+null	false	false
+null	""	false
+"1"	1	false
+"true"	true	false
+[]	[]	true
+[1,2,3]	[1,2,3]	true
+[1,2]	[2,1]	false
+[1,2]	[1,2,3]	false
+[[1],[2]]	[[1],[2]]	true
+[null]	[]	false
+{}	{}	true
+{"a":1}	{"a":1}	true
+{"a":1,"b":2}	{"b":2,"a":1}	true
+{"a":1}	{"a":2}	false
+{"a":1}	{"a":1,"b":2}	false
+{"a":{"b":{"c":1}}}	{"a":{"b":{"c":1}}}	true
+{"a":{"b":{"c":1}}}	{"a":{"b":{"c":2}}}	false
+{"a":[1,{"b":2}]}	{"a":[1,{"b":2}]}	true
+{"a":[1,{"b":2}]}	{"a":[1,{"b":3}]}	false
+# Containers of different kinds are never equal, empty or not.
+[]	{}	false
+{}	[]	false
+[]	null	false
+{}	null	false
+[]	""	false

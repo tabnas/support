@@ -1,0 +1,27 @@
+input	expected
+# The adder grammar — `val = add`, `add = NR [ PL add ]` — from the
+# @tabnas/parser README. Implemented as a plugin in ts/src/adder.ts and
+# go/adder/adder.go, and run against these rows by both runtimes.
+7	7
+0	0
+1+2	3
+1+2+3	6
+10+20	30
+12+3+45	60
+1+2+3+4+5+6+7+8+9+10	55
+# Any number the engine's built-in #NR token lexes is a term.
+1.5+2.5	4
+-1+2	1
+1+-2	-1
+1e3+1	1001
+0.25+0.75	1
+# Space between tokens is lexed away, so it makes no difference where.
+1 + 2	3
+  1+2	3
+1+2 	3
+# Escaped whitespace. The loader decodes \t and \n in the input column,
+# so these rows pin the escape codec end to end: get the decoding wrong
+# in one runtime and that runtime alone stops parsing them.
+1\t+\t2	3
+1\n+\n2	3
+1+2\n+3	6
