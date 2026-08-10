@@ -1,0 +1,92 @@
+# STAGED workflow — lives in ci/workflows/ for review; a maintainer
+# promotes it to .github/workflows/ci.yml via tabnas/admin
+# rollout/apply-ci-folders.sh (session credentials cannot write
+# .github/workflows/*; admin DECISIONS.md ADR-8).
+#
+# Org-standard thin caller, plus one repo-specific job the shared
+# workflow cannot cover — see the go-adder job below.
+name: ci
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  ci:
+    uses: tabnas/.github/.github/workflows/polyglot-ci.yml@main
+    with:
+      # @tabnas/parser is a devDependency of ts/ (for the adder plugin
+      # and its tests) and the dependency of the go/adder module. The
+      # support module itself has no dependencies and never will.
+      #
+      # build-order is omitted: the default, "<deps> <this repo>", is
+      # already "parser support".
+      deps: "parser"
+
+  # The shared workflow tests `go test ./...` in go/ only. go/adder is a
+  # SEPARATE module (that is what keeps the support module
+  # dependency-free), and `./...` does not cross a module boundary — so
+  # without this job the adder suite, which is the end-to-end check that
+  # the two runtimes agree, would silently not run in CI. A test that
+  # quietly does not run reports a green tick that is a lie.
+  #
+  # It is a job here rather than an input to the shared workflow because
+  # no other tabnas repo has a nested module; if a second one appears,
+  # move this upstream as a `go-test-dirs` input instead of copying it.
+  go-adder:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: support
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      # Cloned as a sibling and wired in through the workspace below, so
+      # the adder grammar is tested against parser SOURCE rather than the
+      # published module. Testing against the release would mean a
+      # breaking engine change could not be caught until after it shipped
+      # — which is the whole reason the shared workflow clones siblings.
+      - name: Clone tabnas dependencies
+        run: git clone --depth 1 https://github.com/tabnas/parser.git parser
+
+      # Mirrors the shared workflow's go job: a workspace over every
+      # module in the tree. It also covers the support module itself,
+      # whose version go/adder/go.mod requires may not be published yet
+      # (the local `replace` handles that outside CI).
+      - name: Set up go workspace
+        run: |
+          set -e
+          go work init
+          for gm in $(find . -name go.mod -not -path '*/vendor/*' -not -path '*/node_modules/*'); do
+            go work use "$(dirname "$gm")"
+          done
+          go work edit -json | head -40
+
+      - name: Build
+        working-directory: support/go/adder
+        run: go build ./...
+
+      - name: Test
+        working-directory: support/go/adder
+        run: go test -v ./...
+
+      # gofmt and vet over both modules. Cheap, and the kind of thing
+      # that rots quietly when only one module is checked.
+      - name: Vet and format
+        working-directory: support
+        run: |
+          set -e
+          test -z "$(gofmt -l go)" || (gofmt -l go && echo 'gofmt: files need formatting' && exit 1)
+          (cd go && go vet ./...)
+          (cd go/adder && go vet ./...)

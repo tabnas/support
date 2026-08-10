@@ -112,7 +112,21 @@ The TypeScript package publishes to npm; the Go module is tagged
 constants and `ts/package.json` must be updated together — see
 `make publish-ts` and `make publish-go`.
 
+## CI
+
 CI lives in `.github/workflows/` and is promoted by a maintainer via
-`tabnas/admin` (session credentials cannot write workflow files), so this
-repo's workflows are added out of band, matching the org-standard
-`polyglot-ci.yml` caller the other repos use.
+`tabnas/admin` (session credentials cannot write workflow files), so
+workflow changes are **staged in [`ci/workflows/`](ci/README.md)** and
+moved across out of band.
+
+`ci/workflows/ci.yml` is staged and **not yet promoted — this repo has no
+CI until it is**. Beyond the org-standard `polyglot-ci.yml` caller it
+carries one repo-specific job, `go-adder`: the shared workflow runs `go
+test ./...` in `go/` only, and `./...` does not cross a module boundary,
+so the `go/adder` suite — the end-to-end check that the two runtimes
+agree — would otherwise silently not run.
+
+Keep that job in step with the Makefile: `make test` and CI must cover
+the same three trees (`ts/`, `go/`, `go/adder/`). If a second tabnas repo
+ever grows a nested module, move the job upstream as a `go-test-dirs`
+input to `polyglot-ci.yml` rather than copying it.
