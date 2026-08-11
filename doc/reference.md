@@ -257,6 +257,7 @@ TypeScript builds a runner with `makeRunner(options)` (or
 | `parse` (2nd arg) | `ParseRow` | Parse one input, given the row as well. |
 | `errorCode` | `ErrorCode` | Extract the code from a failure. Optional. |
 | `matchError` | `MatchError` | Decide whether a failure satisfies `ERROR:<want>`, when a code cannot. Optional. |
+| `parseExpected` | `ParseExpected` | Read the expected cell, when the fixture's vocabulary is wider than JSON. Optional. |
 | `normalize` | `Normalize` | Rewrite values before comparison. Optional. |
 | `input` | `Input` / `InputName` | Input column. Default 0. |
 | `expected` | `Expected` / `ExpectedName` | Expected column. Default 1. |
@@ -299,6 +300,16 @@ than two that answer the same code, and a message is the thing most likely
 to be reworded. The hook exists so such a fixture can keep asserting
 *something* specific rather than weakening to a bare `ERROR`, which
 asserts only that it failed.
+
+`parseExpected` widens the expected cell's vocabulary. JSON is what the
+cell should be wherever it can be — it is the one notation both runtimes
+already agree on — but some grammars produce values JSON cannot spell:
+JSON5's `NaN` and `Infinity`, and the `UNDEFINED` several repos use for
+"the parse yielded no value at all", which is a *different result* from
+`null`. Without the hook those fixtures could not pin the distinction they
+exist to pin. It replaces `parseExpect`, so call `parseExpect` for the
+cells the hook does not claim, and it is reached only for a value row —
+an `ERROR` cell is an error expectation before it is anything else.
 
 | TypeScript | Go | Runs |
 |---|---|---|

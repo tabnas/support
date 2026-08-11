@@ -17,7 +17,7 @@ const Os = require('node:os')
 const Path = require('node:path')
 
 const {
-  SpecRunner, makeRunner, parseSpec,
+  SpecRunner, makeRunner, parseSpec, parseExpect,
 } = require('../dist/support.js')
 
 
@@ -146,6 +146,51 @@ describe('runner', () => {
     assert.match(err.message, /t\.tsv:3/)
     assert.match(err.message, /does not match "bad_b"/)
     assert.match(err.message, /other/)
+  })
+
+  it('reads the expected cell through a parseExpected hook', () => {
+    // For a fixture vocabulary wider than JSON. `UNDEFINED` is the
+    // spelling several repos use for "the parse yielded no value at all",
+    // which is a different result from `null` and which JSON cannot say.
+    const wider = parseSpec('w.tsv', [
+      'input\texpected',
+      'a\tUNDEFINED',
+      'b\t"B"',
+    ].join('\n'))
+
+    const runner = makeRunner({
+      parse: (s) => 'a' === s ? undefined : s.toUpperCase(),
+      parseExpected: (cell) =>
+        'UNDEFINED' === cell ? undefined : parseExpect(cell),
+    })
+
+    assert.equal(check(runner, wider, 0), null)
+    // The cells the hook does not claim keep the ordinary rules.
+    assert.equal(check(runner, wider, 1), null)
+  })
+
+  it('fails when a parseExpected row does not match', () => {
+    const wider = parseSpec('w.tsv', ['input\texpected', 'a\tUNDEFINED'].join('\n'))
+    const runner = makeRunner({
+      parse: () => null,   // null is NOT undefined
+      parseExpected: (cell) =>
+        'UNDEFINED' === cell ? undefined : parseExpect(cell),
+    })
+
+    const err = check(runner, wider, 0)
+    assert.match(err.message, /w\.tsv:2/)
+  })
+
+  it('does not reach parseExpected for an ERROR row', () => {
+    // An ERROR cell is an error expectation before it is anything else.
+    let seen = false
+    const runner = makeRunner({
+      parse: () => { const e = new Error('nope'); e.code = 'bad_b'; throw e },
+      parseExpected: (cell) => { seen = true; return parseExpect(cell) },
+    })
+
+    assert.equal(check(runner, spec, 1), null)
+    assert.equal(seen, false)
   })
 
   it('hands the row to the parse hook', () => {

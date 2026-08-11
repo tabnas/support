@@ -54,6 +54,22 @@ type Runner struct {
 	// A bare ERROR cell still means "any error", and does not reach here.
 	MatchError func(err error, want string, row *Row) bool
 
+	// ParseExpected reads the expected cell, when the fixture's vocabulary
+	// is wider than JSON. It replaces ParseExpect, and is reached only for
+	// a value row — an ERROR cell is an error expectation before it is
+	// anything else.
+	//
+	// JSON is what an expected cell should be wherever it can be, because
+	// it is the one notation both runtimes already agree on. But some
+	// grammars produce values JSON cannot spell: JSON5's NaN and Infinity,
+	// and the UNDEFINED several repos use for "the parse yielded no value
+	// at all", which is a different result from null. Those fixtures would
+	// otherwise have to stop pinning the distinction they exist to pin.
+	//
+	// Call ParseExpect for the cells the hook does not claim, so the
+	// ordinary rows keep the ordinary rules.
+	ParseExpected func(expected string, row *Row) (any, error)
+
 	// Normalize rewrites values before comparison — see EqualValueWith.
 	Normalize func(any) any
 
@@ -219,7 +235,14 @@ func (r Runner) CheckRow(row *Row, input, expected string) error {
 		return nil
 	}
 
-	want, err := ParseExpect(expected)
+	parseExpected := ParseExpect
+	if nil != r.ParseExpected {
+		parseExpected = func(cell string) (any, error) {
+			return r.ParseExpected(cell, row)
+		}
+	}
+
+	want, err := parseExpected(expected)
 	if err != nil {
 		return fmt.Errorf("%s: %w", row.Where(), err)
 	}

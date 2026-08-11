@@ -441,3 +441,82 @@ func TestRunnerMatchErrorRejects(t *testing.T) {
 		}
 	}
 }
+
+func TestRunnerParseExpectedHook(t *testing.T) {
+	// For a fixture vocabulary wider than JSON. UNDEFINED is the spelling
+	// several repos use for "the parse yielded no value at all", which is a
+	// different result from null and which JSON cannot say. Go has no
+	// undefined, so a sentinel stands in for it here — the point is that
+	// the hook, not ParseExpect, decides what the cell means.
+	type undef struct{}
+
+	spec := mustParse(t, "w.tsv", strings.Join([]string{
+		"input\texpected",
+		"a\tUNDEFINED",
+		`b	"B"`,
+	}, "\n"), nil)
+
+	r := Runner{
+		Parse: func(s string) (any, error) {
+			if "a" == s {
+				return undef{}, nil
+			}
+			return strings.ToUpper(s), nil
+		},
+		ParseExpected: func(cell string, row *Row) (any, error) {
+			if "UNDEFINED" == cell {
+				return undef{}, nil
+			}
+			return ParseExpect(cell)
+		},
+	}
+
+	if err := check(t, r, spec, 0); err != nil {
+		t.Errorf("UNDEFINED row: %v", err)
+	}
+	// The cells the hook does not claim keep the ordinary rules.
+	if err := check(t, r, spec, 1); err != nil {
+		t.Errorf("JSON row: %v", err)
+	}
+}
+
+func TestRunnerParseExpectedFails(t *testing.T) {
+	// A hook that could only pass would turn every row it claims into a
+	// silent one.
+	type undef struct{}
+
+	spec := mustParse(t, "w.tsv", "input\texpected\na\tUNDEFINED", nil)
+	r := Runner{
+		Parse: func(string) (any, error) { return nil, nil }, // nil is NOT undef
+		ParseExpected: func(cell string, _ *Row) (any, error) {
+			if "UNDEFINED" == cell {
+				return undef{}, nil
+			}
+			return ParseExpect(cell)
+		},
+	}
+
+	if err := check(t, r, spec, 0); nil == err ||
+		!strings.Contains(err.Error(), "w.tsv:2") {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestRunnerParseExpectedNotReachedForError(t *testing.T) {
+	// An ERROR cell is an error expectation before it is anything else.
+	seen := false
+	r := Runner{
+		Parse: func(string) (any, error) { return nil, &methodError{code: "bad_b"} },
+		ParseExpected: func(cell string, _ *Row) (any, error) {
+			seen = true
+			return ParseExpect(cell)
+		},
+	}
+
+	if err := check(t, r, rowsFixture(t), 1); err != nil {
+		t.Errorf("got %v", err)
+	}
+	if seen {
+		t.Error("ParseExpected was consulted for an ERROR row")
+	}
+}
