@@ -1,6 +1,6 @@
 {
   "name": "@tabnas/support",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "main": "dist/support.js",
   "type": "commonjs",
   "types": "dist/support.d.ts",

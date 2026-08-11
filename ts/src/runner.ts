@@ -48,6 +48,22 @@ export type RunnerOptions = {
   // A bare `ERROR` cell still means "any error", and does not reach here.
   matchError?: (err: unknown, want: string, row: SpecRow) => boolean
 
+  // Read the expected cell, when the fixture's vocabulary is wider than
+  // JSON. It replaces `parseExpect`, and is reached only for a value row
+  // — an `ERROR` cell is an error expectation before it is anything else.
+  //
+  // JSON is what an expected cell should be wherever it can be, because
+  // it is the one notation both runtimes already agree on. But some
+  // grammars produce values JSON cannot spell: JSON5's `NaN` and
+  // `Infinity`, and the `UNDEFINED` several repos use for "the parse
+  // yielded no value at all", which is a different result from `null`.
+  // Those fixtures would otherwise have to stop pinning the distinction
+  // they exist to pin.
+  //
+  // Call `parseExpect` for the cells the hook does not claim, so the
+  // ordinary rows keep the ordinary rules.
+  parseExpected?: (expected: string, row: SpecRow) => unknown
+
   // Rewrite values before comparison — see `EqualOptions.normalize`.
   normalize?: (val: unknown) => unknown
 
@@ -168,7 +184,9 @@ export class SpecRunner {
       return
     }
 
-    const want = parseExpect(expected)
+    const want = opts.parseExpected
+      ? opts.parseExpected(expected, row)
+      : parseExpect(expected)
 
     let got: unknown
     try {
