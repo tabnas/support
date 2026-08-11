@@ -107,10 +107,38 @@ belongs in the parser's own docs instead.
 
 ## Release
 
-The TypeScript package publishes to npm; the Go module is tagged
-`go/vX.Y.Z`, and `go/adder` is tagged `go/adder/vX.Y.Z`. Both version
-constants and `ts/package.json` must be updated together — see
-`make publish-ts` and `make publish-go`.
+Three tags, and each one means something different:
+
+| Tag | Effect |
+|---|---|
+| `ts/vX.Y.Z` | CI publishes `@tabnas/support` to npm via OIDC trusted publishing (`ci/workflows/release.yml`). No token is involved, and none is stored in this repo. |
+| `go/vX.Y.Z` | Nothing runs — the Go module proxy serves the module from the tag directly. |
+| `go/adder/vX.Y.Z` | Same, for the nested adder module. Without it the module is unresolvable, because Go finds a nested module only under its own path prefix. |
+
+`make publish-go V=x.y.z` creates the two Go tags together. `make
+publish-ts` is a manual fallback only — the `ts/v*` tag is the intended
+path, and it needs no credentials.
+
+**A plain `vX.Y.Z` tag publishes nothing.** `npm run repo-tag` in
+`ts/package.json` creates exactly that. It is the org-wide script and
+predates the release workflow, which triggers on `ts/v*` — which is how
+`v0.1.1` came to exist here with no `ts/v0.1.1` beside it. Release
+through the orchestrator (`admin/publish.sh`), or tag `ts/vX.Y.Z` by
+hand.
+
+### Bump the version with `make version V=x.y.z`
+
+The version appears in **four** places: `ts/package.json`,
+`ts/src/support.ts`, `go/support.go`, and the `require` on the support
+module in `go/adder/go.mod`. Moving some but not all of them leaves the
+repo **failing**, not merely inconsistent — the version test in each
+runtime compares against `ts/package.json`.
+
+That is not hypothetical. `v0.1.1` shipped with `go/support.go` still
+reading `0.1.0`, which turned `go test ./...` red on `main`; and because
+`publish-go` ran the tests as prerequisites, the target that would have
+fixed it refused to start. `make version` moves all four at once, and
+`publish-go` now tests after the bump rather than before.
 
 ## CI
 
@@ -119,8 +147,12 @@ CI lives in `.github/workflows/` and is promoted by a maintainer via
 workflow changes are **staged in [`ci/workflows/`](ci/README.md)** and
 moved across out of band.
 
-`ci/workflows/ci.yml` is staged and **not yet promoted — this repo has no
-CI until it is**. Beyond the org-standard `polyglot-ci.yml` caller it
+Both `ci/workflows/ci.yml` and `ci/workflows/release.yml` are staged and
+**not yet promoted — this repo has no CI and no release automation until
+they are**. `release.yml` is byte-identical to the other repos' from
+`name:` onward; keep it that way.
+
+Beyond the org-standard `polyglot-ci.yml` caller, `ci.yml`
 carries one repo-specific job, `go-adder`: the shared workflow runs `go
 test ./...` in `go/` only, and `./...` does not cross a module boundary,
 so the `go/adder` suite — the end-to-end check that the two runtimes

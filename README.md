@@ -161,9 +161,15 @@ make test    # both runtimes, including the adder module
 make vet     # go vet over both Go modules
 ```
 
-CI is staged in [`ci/workflows/ci.yml`](ci/README.md) and **not yet
-promoted** — workflow files are moved into `.github/` by a maintainer, so
-until that happens nothing here runs on push or PR.
+CI and the npm release are staged in [`ci/workflows/`](ci/README.md) and
+**not yet promoted** — workflow files are moved into `.github/` by a
+maintainer, so until that happens nothing here runs on push or PR, and no
+tag publishes anything.
+
+Releasing bumps four version sites at once (`make version V=x.y.z`), then
+tags: `ts/vX.Y.Z` publishes to npm via OIDC trusted publishing, and
+`make publish-go V=x.y.z` tags both Go modules. A plain `vX.Y.Z` tag
+publishes nothing — see [AGENTS.md](AGENTS.md#release).
 
 ## License
 

@@ -11,9 +11,31 @@ This directory exists because session credentials cannot write
 
 ## Pending
 
-**`workflows/ci.yml` — not yet promoted. This repo currently has no CI at
-all**, so nothing here is verified on push or PR until a maintainer moves
-that file to `.github/workflows/ci.yml`.
+**Neither file is promoted yet. This repo currently has no CI and no
+release automation at all**, so nothing here is verified on push or PR,
+and no tag publishes anything, until a maintainer moves both files into
+`.github/workflows/`.
+
+### `workflows/release.yml`
+
+Publishes `@tabnas/support` to npm on a `ts/v*` tag push, via GitHub OIDC
+Trusted Publishing — no `NPM_TOKEN`, no secret in this repo at all. It is
+**byte-identical** to the `release.yml` in `parser`, `json`, `jsonic` and
+`expr` from `name:` onward, so promoting it is a copy rather than a
+review.
+
+Two things follow from the trigger being `ts/v*`:
+
+- A plain `vX.Y.Z` tag publishes **nothing**. `npm run repo-tag` in
+  `ts/package.json` creates exactly that (it is the org-wide script, and
+  it predates the release workflow), which is how `v0.1.1` came to exist
+  here with no `ts/v0.1.1` beside it. Release through the orchestrator,
+  or tag `ts/vX.Y.Z` by hand.
+- The Go modules are not published by any workflow. The module proxy
+  serves them from their tags directly, and `make publish-go` creates
+  both `go/vX.Y.Z` and `go/adder/vX.Y.Z`.
+
+### `workflows/ci.yml`
 
 It has two jobs:
 
