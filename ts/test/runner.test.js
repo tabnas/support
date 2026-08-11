@@ -108,6 +108,63 @@ describe('runner', () => {
     assert.equal(check(runner, spec, 1), null)
   })
 
+  it('matches an error through a matchError hook', () => {
+    // For a grammar with no stable code to pin: the hook replaces the code
+    // comparison, so `ERROR:bad_b` can be matched against the message.
+    // Without it such a fixture would have to weaken to a bare `ERROR`,
+    // which asserts nothing beyond "it failed".
+    let seen = ''
+    const runner = makeRunner({
+      parse: () => { throw new Error('something bad_b happened') },
+      // Deliberately a wrong answer: matchError replaces the code
+      // comparison entirely, so this must not be read.
+      errorCode: () => 'WRONG',
+      matchError: (err, want, row) => {
+        seen = row.where()
+        return err.message.includes(want)
+      },
+    })
+
+    assert.equal(check(runner, spec, 1), null)
+    assert.equal(seen, 't.tsv:3')
+
+    // A bare ERROR means "any error" and never reaches the hook.
+    seen = ''
+    assert.equal(check(runner, spec, 2), null)
+    assert.equal(seen, '')
+  })
+
+  it('fails a row its matchError hook rejects', () => {
+    // A hook that could only pass would turn every error fixture into a
+    // silent one.
+    const runner = makeRunner({
+      parse: () => { throw new Error('other') },
+      matchError: () => false,
+    })
+
+    const err = check(runner, spec, 1)
+    assert.match(err.message, /t\.tsv:3/)
+    assert.match(err.message, /does not match "bad_b"/)
+    assert.match(err.message, /other/)
+  })
+
+  it('hands the row to the parse hook', () => {
+    // A fixture whose other columns take part in the parse — an `opts`
+    // column of plugin options is the common one — needs more than the
+    // input string.
+    const opted = parseSpec('o.tsv', [
+      'input\texpected\topts',
+      'a\t"A"\tupper',
+      'b\t"b"\t',
+    ].join('\n'))
+    const runner = makeRunner({
+      parse: (s, row) => 'upper' === row.named('opts') ? s.toUpperCase() : s,
+    })
+
+    assert.equal(check(runner, opted, 0), null)
+    assert.equal(check(runner, opted, 1), null)
+  })
+
   it('compares through a normalize hook', () => {
     const runner = makeRunner({
       parse: (s) => ({ boxed: s.toUpperCase() }),

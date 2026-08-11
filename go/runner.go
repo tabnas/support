@@ -20,13 +20,39 @@ import (
 // Runner drives fixture rows through one parser. Reuse it across files.
 type Runner struct {
 	// Parse parses one input. It must return an error for input the
-	// grammar must not accept. Required.
+	// grammar must not accept. Either this or ParseRow is required.
 	Parse func(input string) (any, error)
+
+	// ParseRow is Parse with the row as well, for a fixture whose other
+	// columns take part in the parse — an `opts` column of plugin options
+	// is the common one. Set this OR Parse, not both.
+	//
+	// ⚠ differs from TypeScript, where `parse` simply takes a second
+	// argument that a caller who does not want it can leave off. Go has
+	// no optional parameter, and folding the row into Parse would make
+	// every simple suite — the majority — write an ignored `_ *Row` and
+	// give up passing a parser's own method as the hook.
+	ParseRow func(input string, row *Row) (any, error)
 
 	// ErrorCode extracts the code from a parse error. Only needed for
 	// fixtures with ERROR:<code> rows. The default reads a `Code() string`
 	// or `Code string`, which is what *TabnasError carries.
 	ErrorCode func(err error) string
+
+	// MatchError decides whether a parse error satisfies an ERROR:<want>
+	// row, when comparing a code cannot. It replaces the code comparison
+	// entirely, so ErrorCode is not consulted for a runner that sets this.
+	//
+	// A code is the contract this package prefers — two runtimes that
+	// reject the same input for different reasons have not agreed on
+	// anything — but some grammars have no stable code to pin: a parser
+	// whose failures are distinguished only by their message, or a fixture
+	// that names a position (ERROR:1:8) rather than a kind. Those fixtures
+	// would otherwise have to weaken to a bare ERROR, which asserts
+	// nothing more than "it failed".
+	//
+	// A bare ERROR cell still means "any error", and does not reach here.
+	MatchError func(err error, want string, row *Row) bool
 
 	// Normalize rewrites values before comparison — see EqualValueWith.
 	Normalize func(any) any
@@ -122,6 +148,12 @@ func (r Runner) CheckSpec(spec *File) error {
 		return fmt.Errorf("%s: no cases", spec.Name)
 	}
 
+	// A misconfigured pair of parse hooks is a defect in the caller, and
+	// saying so once beats saying it as one red case per row.
+	if _, err := r.parser(); err != nil {
+		return fmt.Errorf("%s: %w", spec.Name, err)
+	}
+
 	if _, err := r.column(spec, r.Input, r.InputName, 0); err != nil {
 		return fmt.Errorf("%s: input column: %w", spec.Name, err)
 	}
@@ -146,8 +178,9 @@ func (r Runner) Row(t *testing.T, row *Row, input, expected string) {
 func (r Runner) CheckRow(row *Row, input, expected string) error {
 	// Said plainly, rather than as a nil-func panic from inside the
 	// comparison, where the cause is much less obvious.
-	if nil == r.Parse {
-		return fmt.Errorf("%s: Runner.Parse is required", row.Where())
+	parse, err := r.parser()
+	if err != nil {
+		return fmt.Errorf("%s: %w", row.Where(), err)
 	}
 
 	if IsErrorExpect(expected) {
@@ -156,7 +189,7 @@ func (r Runner) CheckRow(row *Row, input, expected string) error {
 			return fmt.Errorf("%s: %w", row.Where(), err)
 		}
 
-		got, parseErr := r.Parse(input)
+		got, parseErr := parse(input, row)
 		if nil == parseErr {
 			return fmt.Errorf(
 				"%s: Parse(%q) should fail with %s, but returned %s",
@@ -164,14 +197,22 @@ func (r Runner) CheckRow(row *Row, input, expected string) error {
 		}
 
 		if "" != want {
-			code := errCode(parseErr)
-			if nil != r.ErrorCode {
-				code = r.ErrorCode(parseErr)
-			}
-			if code != want {
-				return fmt.Errorf(
-					"%s: Parse(%q) failed with code %q, expected %q\n  error: %v",
-					row.Where(), input, code, want, parseErr)
+			if nil != r.MatchError {
+				if !r.MatchError(parseErr, want, row) {
+					return fmt.Errorf(
+						"%s: Parse(%q) failed, but the error does not match %q\n  error: %v",
+						row.Where(), input, want, parseErr)
+				}
+			} else {
+				code := errCode(parseErr)
+				if nil != r.ErrorCode {
+					code = r.ErrorCode(parseErr)
+				}
+				if code != want {
+					return fmt.Errorf(
+						"%s: Parse(%q) failed with code %q, expected %q\n  error: %v",
+						row.Where(), input, code, want, parseErr)
+				}
 			}
 		}
 
@@ -183,7 +224,7 @@ func (r Runner) CheckRow(row *Row, input, expected string) error {
 		return fmt.Errorf("%s: %w", row.Where(), err)
 	}
 
-	got, parseErr := r.Parse(input)
+	got, parseErr := parse(input, row)
 	if parseErr != nil {
 		return fmt.Errorf("%s: Parse(%q) failed: %v",
 			row.Where(), input, parseErr)
@@ -196,6 +237,25 @@ func (r Runner) CheckRow(row *Row, input, expected string) error {
 	}
 
 	return nil
+}
+
+// parser resolves the two parse hooks to the one form CheckRow uses, and
+// reports the two ways a Runner can be built wrong: neither hook set, or
+// both. Both-set is an error rather than a precedence rule because the
+// two say different things about the same row, and quietly running one of
+// them would hide the fact that the other never ran.
+func (r Runner) parser() (func(string, *Row) (any, error), error) {
+	switch {
+	case nil == r.Parse && nil == r.ParseRow:
+		return nil, fmt.Errorf("Runner.Parse or Runner.ParseRow is required")
+	case nil != r.Parse && nil != r.ParseRow:
+		return nil, fmt.Errorf("Runner.Parse and Runner.ParseRow are both set; use one")
+	case nil != r.ParseRow:
+		return r.ParseRow, nil
+	}
+
+	parse := r.Parse
+	return func(input string, _ *Row) (any, error) { return parse(input) }, nil
 }
 
 // column resolves a column selector — a name when given, else a position,

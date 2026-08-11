@@ -2,8 +2,8 @@
 
 The fixture format, and the full API in both runtimes side by side. The
 two are written to behave identically; where a difference is unavoidable
-it is marked **⚠ differs** and explained. There are five, and adding a
-sixth without documenting it silently breaks the guarantee the package
+it is marked **⚠ differs** and explained. There are six, and adding a
+seventh without documenting it silently breaks the guarantee the package
 exists to provide.
 
 - TypeScript: `@tabnas/support`, source in [`../ts/src/`](../ts/src/).
@@ -254,7 +254,9 @@ TypeScript builds a runner with `makeRunner(options)` (or
 | TypeScript | Go | Meaning |
 |---|---|---|
 | `parse` | `Parse` | Parse one input. **Required.** TS throws on rejection; Go returns an `error`. |
+| `parse` (2nd arg) | `ParseRow` | Parse one input, given the row as well. |
 | `errorCode` | `ErrorCode` | Extract the code from a failure. Optional. |
+| `matchError` | `MatchError` | Decide whether a failure satisfies `ERROR:<want>`, when a code cannot. Optional. |
 | `normalize` | `Normalize` | Rewrite values before comparison. Optional. |
 | `input` | `Input` / `InputName` | Input column. Default 0. |
 | `expected` | `Expected` / `ExpectedName` | Expected column. Default 1. |
@@ -265,10 +267,38 @@ Go's `Input` and `Expected` are `*int` because 0 is a real column: a plain
 `int` could not tell "column 0" from "not set", and the one it would have
 to guess wrong is the default. `Int(0)` builds one.
 
+The row is handed to the parse hook because a fixture's other columns can
+take part in the parse — an `opts` column of plugin options is the common
+one, and a runner that could not see it would leave every such repo
+writing its own loop again.
+
+> **⚠ differs.** TypeScript's `parse` simply takes the row as a second
+> argument, which a caller who does not want it leaves off. Go has no
+> optional parameter, so the row-taking form is the separate field
+> `ParseRow`; folding the row into `Parse` would make every simple suite —
+> the majority — write an ignored `_ *Row` and give up passing a parser's
+> own method as the hook. Set one or the other: setting both is an error,
+> not a precedence rule, because the two say different things about the
+> same row and running one quietly would hide that the other never ran.
+
 The default `errorCode` reads `err.code` in TypeScript, and in Go reads a
 `Code() string` method or a `Code` string field — which is what
 `*tabnas.TabnasError` carries, read by shape so this module needs no
 dependency on the parser.
+
+`matchError` is the escape hatch for a grammar with no stable code to pin
+— one whose failures are distinguished only by their message, or a fixture
+that names a position (`ERROR:1:8`) rather than a kind. It is handed the
+error, the wanted text and the row, and it **replaces** the code
+comparison, so `errorCode` is not consulted by a runner that sets it. A
+bare `ERROR` still means "any error" and does not reach the hook.
+
+Prefer a code where there is one. Matching a message pins less: two
+runtimes whose messages happen to share a substring have agreed on less
+than two that answer the same code, and a message is the thing most likely
+to be reworded. The hook exists so such a fixture can keep asserting
+*something* specific rather than weakening to a bare `ERROR`, which
+asserts only that it failed.
 
 | TypeScript | Go | Runs |
 |---|---|---|

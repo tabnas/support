@@ -22,7 +22,7 @@
  *     .file(Path.join(findSpecDir(__dirname), 'happy.tsv'))
  */
 
-export const VERSION = '0.1.3'
+export const VERSION = '0.2.0'
 
 export { unescape, escape } from './escape'
 

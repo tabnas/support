@@ -33,6 +33,21 @@ export type RunnerOptions = {
   // `TabnasError` exposes.
   errorCode?: (err: unknown, row: SpecRow) => string | undefined
 
+  // Decide whether a thrown error satisfies an `ERROR:<want>` row, when
+  // comparing a code cannot. It replaces the code comparison entirely, so
+  // `errorCode` is not consulted for a runner that sets this.
+  //
+  // A code is the contract this package prefers — two runtimes that reject
+  // the same input for different reasons have not agreed on anything — but
+  // some grammars have no stable code to pin: a parser whose failures are
+  // distinguished only by their message, or a fixture that names a
+  // position (`ERROR:1:8`) rather than a kind. Those fixtures would
+  // otherwise have to weaken to a bare `ERROR`, which asserts nothing more
+  // than "it failed".
+  //
+  // A bare `ERROR` cell still means "any error", and does not reach here.
+  matchError?: (err: unknown, want: string, row: SpecRow) => boolean
+
   // Rewrite values before comparison — see `EqualOptions.normalize`.
   normalize?: (val: unknown) => unknown
 
@@ -129,14 +144,24 @@ export class SpecRunner {
       }
 
       if ('' !== want) {
-        const code = opts.errorCode
-          ? opts.errorCode(threw, row)
-          : (threw as any)?.code
-        if (code !== want) {
-          throw new Error(
-            `${row.where()}: parse(${JSON.stringify(input)}) failed with ` +
-            `code ${formatValue(code)}, expected ${JSON.stringify(want)}` +
-            `\n  error: ${threw}`)
+        if (opts.matchError) {
+          if (!opts.matchError(threw, want, row)) {
+            throw new Error(
+              `${row.where()}: parse(${JSON.stringify(input)}) failed, but ` +
+              `the error does not match ${JSON.stringify(want)}` +
+              `\n  error: ${threw}`)
+          }
+        }
+        else {
+          const code = opts.errorCode
+            ? opts.errorCode(threw, row)
+            : (threw as any)?.code
+          if (code !== want) {
+            throw new Error(
+              `${row.where()}: parse(${JSON.stringify(input)}) failed with ` +
+              `code ${formatValue(code)}, expected ${JSON.stringify(want)}` +
+              `\n  error: ${threw}`)
+          }
         }
       }
 
