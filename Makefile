@@ -109,7 +109,13 @@ publish-go:
 	rm -f go/support.go.bak go/adder/go.mod.bak
 	$(MAKE) test-go test-go-adder
 	git add go/support.go go/adder/go.mod
-	git commit -m "go: v$(V)"
+	# Commit only if the bump above actually changed something. When the
+	# version is already committed — which is the NORMAL case now that
+	# `make version` sets all four sites in one go — both seds are
+	# no-ops, `git commit` exits 1 on "nothing to commit", and make would
+	# abort before creating either tag. That would fail exactly when the
+	# release is otherwise ready.
+	git diff --cached --quiet || git commit -m "go: v$(V)"
 	# Both modules are tagged. go/adder is a nested module, so Go tooling
 	# can only discover its releases under go/adder/vX.Y.Z — tagging go/
 	# alone would leave the documented adder package unresolvable.

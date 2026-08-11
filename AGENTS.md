@@ -115,9 +115,11 @@ Three tags, and each one means something different:
 | `go/vX.Y.Z` | Nothing runs — the Go module proxy serves the module from the tag directly. |
 | `go/adder/vX.Y.Z` | Same, for the nested adder module. Without it the module is unresolvable, because Go finds a nested module only under its own path prefix. |
 
-`make publish-go V=x.y.z` creates the two Go tags together. `make
-publish-ts` is a manual fallback only — the `ts/v*` tag is the intended
-path, and it needs no credentials.
+`make publish-go V=x.y.z` creates the two Go tags together. It bumps the
+Go version sites if they are behind and commits that, and is equally
+happy when `make version` already set them and the commit is in — the
+normal case. `make publish-ts` is a manual fallback only; the `ts/v*`
+tag is the intended path, and it needs no credentials.
 
 **A plain `vX.Y.Z` tag publishes nothing.** `npm run repo-tag` in
 `ts/package.json` creates exactly that. It is the org-wide script and
