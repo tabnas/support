@@ -54,14 +54,21 @@ sides already matched.
    runtime's own limits and are shared rather than papered over —
    integers beyond 2^53 are inexact in both, and making Go exact would
    make it *reject* rows TypeScript accepts.
-4. **The version is one number.** `ts/package.json`, `ts/src/support.ts`
-   (`VERSION`) and `go/support.go` (`VERSION`) must agree; the version
-   test in each runtime fails the build when they drift.
-   `go/adder/go.mod`'s `require` on the support module is a fourth place
-   the number appears — it must name a real published version, because a
-   `replace` in a dependency module is ignored by whoever imports it.
-   `make publish-go` updates it and refuses to run when `ts/` has not
-   been bumped first.
+4. **The version is one number, in four places, all four checked.**
+   `ts/package.json` is the source of truth. `ts/test/version.test.js`
+   pins `ts/src/support.ts` to it; `go/version_test.go` reads it off
+   disk and pins both `go/support.go` (`VERSION`) and the `require` on
+   the support module in `go/adder/go.mod`.
+
+   That fourth site is the one a stale version breaks nothing local: a
+   `replace` covers it for anyone building in this repo, but a `replace`
+   in a dependency module is ignored by whoever imports it, so an
+   external `go get` resolves the version named there and fails. It sat
+   at `v0.1.0` through the 0.1.1 release because nothing looked. Now
+   something does.
+
+   `make version V=x.y.z` sets all four; `make publish-go` refuses to
+   run when `ts/` has not been bumped first.
 5. **This is test-support code and must never reach a release
    artifact.** In TypeScript that means a `devDependency` imported only
    from `test/`; in Go it means importing it only from `_test.go` files,
@@ -85,6 +92,16 @@ sides already matched.
   them has a test asserting it fails when it should. A runner that
   quietly passes is the one bug that hides every other one, so no guard
   here is allowed to be unassertable.
+- **Every shared fixture must run in BOTH runtimes**, and the census
+  tests (`go/census_test.go`, `ts/test/census.test.js`) enforce it.
+  `test/spec/adder/` is discovered by directory listing in both, so a
+  fixture added there runs in both automatically. `test/spec/util/`
+  cannot be — each file has its own column shape and assertion, so each
+  suite names the files it runs, and a fixture wired into one runtime
+  only would otherwise be silent. The census is a static tripwire, not
+  proof: it checks the fixture's name appears in that runtime's test
+  sources, so a name in a comment would satisfy it. It catches the
+  realistic mistake, which nothing else here would.
 
 ## The mini plugin
 
