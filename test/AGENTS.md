@@ -83,6 +83,13 @@ neighbour. See [`doc/reference.md`](../doc/reference.md).
 `.tsv` there runs it in both without touching either runner. The `util/`
 fixtures are named explicitly, because each has its own column shape.
 
+**A `util/` fixture must be wired into both runtimes, and the census
+tests check it** (`go/census_test.go`, `ts/test/census.test.js`): each
+asserts that every `*.tsv` in `util/` is named somewhere in its own test
+sources, so adding a fixture and wiring up one side turns the other side
+red. A row only one runtime runs is agreed by nobody, which is the one
+thing this directory exists to prevent.
+
 `spec/util/loader-rows.tsv` is a **layout** fixture: both runtimes assert
 its rows sit on specific physical line numbers. Do not reflow it, and do
 not add or remove lines above the data without updating both assertions.

@@ -54,14 +54,21 @@ sides already matched.
    runtime's own limits and are shared rather than papered over —
    integers beyond 2^53 are inexact in both, and making Go exact would
    make it *reject* rows TypeScript accepts.
-4. **The version is one number.** `ts/package.json`, `ts/src/support.ts`
-   (`VERSION`) and `go/support.go` (`VERSION`) must agree; the version
-   test in each runtime fails the build when they drift.
-   `go/adder/go.mod`'s `require` on the support module is a fourth place
-   the number appears — it must name a real published version, because a
-   `replace` in a dependency module is ignored by whoever imports it.
-   `make publish-go` updates it and refuses to run when `ts/` has not
-   been bumped first.
+4. **The version is one number, in four places, all four checked.**
+   `ts/package.json` is the source of truth. `ts/test/version.test.js`
+   pins `ts/src/support.ts` to it; `go/version_test.go` reads it off
+   disk and pins both `go/support.go` (`VERSION`) and the `require` on
+   the support module in `go/adder/go.mod`.
+
+   That fourth site is the one a stale version breaks nothing local: a
+   `replace` covers it for anyone building in this repo, but a `replace`
+   in a dependency module is ignored by whoever imports it, so an
+   external `go get` resolves the version named there and fails. It sat
+   at `v0.1.0` through the 0.1.1 release because nothing looked. Now
+   something does.
+
+   `make version V=x.y.z` sets all four; `make publish-go` refuses to
+   run when `ts/` has not been bumped first.
 5. **This is test-support code and must never reach a release
    artifact.** In TypeScript that means a `devDependency` imported only
    from `test/`; in Go it means importing it only from `_test.go` files,
@@ -85,6 +92,16 @@ sides already matched.
   them has a test asserting it fails when it should. A runner that
   quietly passes is the one bug that hides every other one, so no guard
   here is allowed to be unassertable.
+- **Every shared fixture must run in BOTH runtimes**, and the census
+  tests (`go/census_test.go`, `ts/test/census.test.js`) enforce it.
+  `test/spec/adder/` is discovered by directory listing in both, so a
+  fixture added there runs in both automatically. `test/spec/util/`
+  cannot be — each file has its own column shape and assertion, so each
+  suite names the files it runs, and a fixture wired into one runtime
+  only would otherwise be silent. The census is a static tripwire, not
+  proof: it checks the fixture's name appears in that runtime's test
+  sources, so a name in a comment would satisfy it. It catches the
+  realistic mistake, which nothing else here would.
 
 ## The mini plugin
 
@@ -107,10 +124,40 @@ belongs in the parser's own docs instead.
 
 ## Release
 
-The TypeScript package publishes to npm; the Go module is tagged
-`go/vX.Y.Z`, and `go/adder` is tagged `go/adder/vX.Y.Z`. Both version
-constants and `ts/package.json` must be updated together — see
-`make publish-ts` and `make publish-go`.
+Three tags, and each one means something different:
+
+| Tag | Effect |
+|---|---|
+| `ts/vX.Y.Z` | CI publishes `@tabnas/support` to npm via OIDC trusted publishing (`ci/workflows/release.yml`). No token is involved, and none is stored in this repo. |
+| `go/vX.Y.Z` | Nothing runs — the Go module proxy serves the module from the tag directly. |
+| `go/adder/vX.Y.Z` | Same, for the nested adder module. Without it the module is unresolvable, because Go finds a nested module only under its own path prefix. |
+
+`make publish-go V=x.y.z` creates the two Go tags together. It bumps the
+Go version sites if they are behind and commits that, and is equally
+happy when `make version` already set them and the commit is in — the
+normal case. `make publish-ts` is a manual fallback only; the `ts/v*`
+tag is the intended path, and it needs no credentials.
+
+**A plain `vX.Y.Z` tag publishes nothing.** `npm run repo-tag` in
+`ts/package.json` creates exactly that. It is the org-wide script and
+predates the release workflow, which triggers on `ts/v*` — which is how
+`v0.1.1` came to exist here with no `ts/v0.1.1` beside it. Release
+through the orchestrator (`admin/publish.sh`), or tag `ts/vX.Y.Z` by
+hand.
+
+### Bump the version with `make version V=x.y.z`
+
+The version appears in **four** places: `ts/package.json`,
+`ts/src/support.ts`, `go/support.go`, and the `require` on the support
+module in `go/adder/go.mod`. Moving some but not all of them leaves the
+repo **failing**, not merely inconsistent — the version test in each
+runtime compares against `ts/package.json`.
+
+That is not hypothetical. `v0.1.1` shipped with `go/support.go` still
+reading `0.1.0`, which turned `go test ./...` red on `main`; and because
+`publish-go` ran the tests as prerequisites, the target that would have
+fixed it refused to start. `make version` moves all four at once, and
+`publish-go` now tests after the bump rather than before.
 
 ## CI
 
@@ -119,12 +166,15 @@ CI lives in `.github/workflows/` and is promoted by a maintainer via
 workflow changes are **staged in [`ci/workflows/`](ci/README.md)** and
 moved across out of band.
 
-`ci/workflows/ci.yml` is staged and **not yet promoted — this repo has no
-CI until it is**. Beyond the org-standard `polyglot-ci.yml` caller it
-carries one repo-specific job, `go-adder`: the shared workflow runs `go
-test ./...` in `go/` only, and `./...` does not cross a module boundary,
-so the `go/adder` suite — the end-to-end check that the two runtimes
-agree — would otherwise silently not run.
+`.github/workflows/ci.yml` and `.github/workflows/release.yml` are both
+promoted and live. `release.yml` is byte-identical to the other repos'
+from `name:` onward; keep it that way.
+
+Beyond the org-standard `polyglot-ci.yml` caller, `ci.yml` carries one
+repo-specific job, `go-adder`: the shared workflow runs `go test ./...`
+in `go/` only, and `./...` does not cross a module boundary, so the
+`go/adder` suite — the end-to-end check that the two runtimes agree —
+would otherwise silently not run.
 
 Keep that job in step with the Makefile: `make test` and CI must cover
 the same three trees (`ts/`, `go/`, `go/adder/`). If a second tabnas repo
