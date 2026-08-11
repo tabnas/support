@@ -166,10 +166,10 @@ publishes to npm via OIDC trusted publishing
 (`.github/workflows/release.yml`). Workflow changes are staged in
 [`ci/`](ci/README.md) first — a maintainer moves them into `.github/`.
 
-Releasing bumps four version sites at once (`make version V=x.y.z`), then
-tags: `ts/vX.Y.Z` publishes to npm via OIDC trusted publishing, and
-`make publish-go V=x.y.z` tags both Go modules. A plain `vX.Y.Z` tag
-publishes nothing — see [AGENTS.md](AGENTS.md#release).
+Releasing is three commands — `make version V=x.y.z` to move all four
+version sites, then `make tag-ts V=x.y.z` (npm, via OIDC trusted
+publishing) and `make publish-go V=x.y.z` (both Go modules). A plain
+`vX.Y.Z` tag publishes nothing — see [AGENTS.md](AGENTS.md#release).
 
 ## License
 

@@ -128,22 +128,34 @@ Three tags, and each one means something different:
 
 | Tag | Effect |
 |---|---|
-| `ts/vX.Y.Z` | CI publishes `@tabnas/support` to npm via OIDC trusted publishing (`ci/workflows/release.yml`). No token is involved, and none is stored in this repo. |
+| `ts/vX.Y.Z` | CI publishes `@tabnas/support` to npm via OIDC trusted publishing (`.github/workflows/release.yml`). No token is involved, and none is stored in this repo. |
 | `go/vX.Y.Z` | Nothing runs — the Go module proxy serves the module from the tag directly. |
 | `go/adder/vX.Y.Z` | Same, for the nested adder module. Without it the module is unresolvable, because Go finds a nested module only under its own path prefix. |
 
-`make publish-go V=x.y.z` creates the two Go tags together. It bumps the
-Go version sites if they are behind and commits that, and is equally
-happy when `make version` already set them and the commit is in — the
-normal case. `make publish-ts` is a manual fallback only; the `ts/v*`
-tag is the intended path, and it needs no credentials.
+The whole release is three commands:
 
-**A plain `vX.Y.Z` tag publishes nothing.** `npm run repo-tag` in
-`ts/package.json` creates exactly that. It is the org-wide script and
-predates the release workflow, which triggers on `ts/v*` — which is how
-`v0.1.1` came to exist here with no `ts/v0.1.1` beside it. Release
-through the orchestrator (`admin/publish.sh`), or tag `ts/vX.Y.Z` by
-hand.
+```bash
+make version V=x.y.z    # all four version sites; commit and merge to main
+make tag-ts V=x.y.z     # pushes ts/vX.Y.Z — CI publishes to npm with provenance
+make publish-go V=x.y.z # pushes go/vX.Y.Z and go/adder/vX.Y.Z
+```
+
+Both tag targets tolerate a tag already at HEAD, so a half-done release
+can be finished, and both refuse a tag that exists on a *different*
+commit — that means the version shipped and the code has moved, so the
+answer is a new version, not a moved tag.
+
+**A plain `vX.Y.Z` tag publishes nothing**, because the workflow triggers
+on `ts/v*`. That is not hypothetical: `v0.1.1` was tagged that way, no
+workflow ran, and the package was then published by hand — which is why
+`@tabnas/support@0.1.1` carries no attestations while
+`@tabnas/parser@0.8.1` does. `npm run repo-tag` used to create exactly
+that wrong tag and `repo-publish-quick` used to `npm publish` locally,
+bypassing OIDC; both now go through the `ts/v*` tag instead.
+
+`make publish-ts` still publishes straight from a workstation. It is the
+last resort — it produces an unattested release, which is the failure
+above.
 
 ### Bump the version with `make version V=x.y.z`
 

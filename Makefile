@@ -6,7 +6,7 @@
 # `go test ./...` in go/ does not reach it and it is run explicitly here.
 
 .PHONY: all build test clean build-ts build-go test-ts test-go test-go-adder \
-        clean-ts clean-go publish-ts publish-go tags-go reset fmt-go vet \
+        clean-ts clean-go publish-ts publish-go tag-ts tags-go reset fmt-go vet \
         version
 
 all: build test
@@ -27,13 +27,46 @@ test-ts:
 clean-ts:
 	rm -rf ts/dist
 
-# Publish the TypeScript package at its current package.json version.
+# Tag the TypeScript release: make tag-ts V=x.y.z
 #
-# Normally you do NOT run this: pushing a `ts/vX.Y.Z` tag makes CI publish
-# via OIDC trusted publishing (ci/workflows/release.yml), with no token
-# anywhere. This target is the manual fallback for when that path is
-# unavailable, and it needs credentials this repo deliberately does not
-# carry.
+# THIS is how the npm package is published. Pushing a `ts/vX.Y.Z` tag
+# triggers .github/workflows/release.yml, which publishes via OIDC
+# trusted publishing — no token, and the release carries provenance.
+#
+# The `ts/` prefix is load-bearing: the workflow triggers on `ts/v*`, and
+# a plain `vX.Y.Z` tag publishes NOTHING. That is not hypothetical — the
+# 0.1.1 release was tagged `v0.1.1`, no workflow ran, and the package was
+# then published by hand with no attestations.
+tag-ts:
+	@test -n "$(V)" || (echo "Usage: make tag-ts V=x.y.z" && exit 1)
+	@TS_V=`node -e "console.log(require('./ts/package.json').version)"`; \
+	  test "$$TS_V" = "$(V)" || \
+	  (echo "ts/package.json is at $$TS_V, not $(V) — run make version V=$(V) first" && exit 1)
+	# The tag must point at a commit the remote already has, or it
+	# references something nobody else can see.
+	@git fetch -q origin main
+	@test "$$(git rev-parse HEAD)" = "$$(git rev-parse origin/main)" || \
+	  (echo "HEAD is not origin/main — merge and push the release commit first" && exit 1)
+	@T=ts/v$(V); \
+	  if git rev-parse -q --verify "refs/tags/$$T" >/dev/null; then \
+	    if [ "$$(git rev-parse "refs/tags/$$T^{commit}")" != "$$(git rev-parse HEAD)" ]; then \
+	      echo "tag $$T exists on a different commit — bump the version instead"; \
+	      exit 1; \
+	    fi; \
+	    echo "tag $$T already at HEAD — leaving it"; \
+	  else \
+	    git tag "$$T"; \
+	  fi
+	git push origin ts/v$(V)
+	@echo "pushed ts/v$(V) — watch the release workflow, then confirm provenance:"
+	@echo "  npm view @tabnas/support@$(V) dist.attestations"
+
+# Publish the TypeScript package straight from this machine.
+#
+# The LAST resort. It bypasses OIDC entirely, so the release lands with
+# no provenance — which is exactly how 0.1.1 shipped unattested while
+# @tabnas/parser's releases carry attestations. Use `make tag-ts` unless
+# trusted publishing is genuinely unavailable.
 publish-ts: test-ts
 	cd ts && npm publish --access public
 
