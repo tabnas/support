@@ -166,16 +166,15 @@ CI lives in `.github/workflows/` and is promoted by a maintainer via
 workflow changes are **staged in [`ci/workflows/`](ci/README.md)** and
 moved across out of band.
 
-Both `ci/workflows/ci.yml` and `ci/workflows/release.yml` are staged and
-**not yet promoted — this repo has no CI and no release automation until
-they are**. `release.yml` is byte-identical to the other repos' from
-`name:` onward; keep it that way.
+`.github/workflows/ci.yml` and `.github/workflows/release.yml` are both
+promoted and live. `release.yml` is byte-identical to the other repos'
+from `name:` onward; keep it that way.
 
-Beyond the org-standard `polyglot-ci.yml` caller, `ci.yml`
-carries one repo-specific job, `go-adder`: the shared workflow runs `go
-test ./...` in `go/` only, and `./...` does not cross a module boundary,
-so the `go/adder` suite — the end-to-end check that the two runtimes
-agree — would otherwise silently not run.
+Beyond the org-standard `polyglot-ci.yml` caller, `ci.yml` carries one
+repo-specific job, `go-adder`: the shared workflow runs `go test ./...`
+in `go/` only, and `./...` does not cross a module boundary, so the
+`go/adder` suite — the end-to-end check that the two runtimes agree —
+would otherwise silently not run.
 
 Keep that job in step with the Makefile: `make test` and CI must cover
 the same three trees (`ts/`, `go/`, `go/adder/`). If a second tabnas repo

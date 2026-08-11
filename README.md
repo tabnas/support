@@ -161,10 +161,10 @@ make test    # both runtimes, including the adder module
 make vet     # go vet over both Go modules
 ```
 
-CI and the npm release are staged in [`ci/workflows/`](ci/README.md) and
-**not yet promoted** — workflow files are moved into `.github/` by a
-maintainer, so until that happens nothing here runs on push or PR, and no
-tag publishes anything.
+CI runs on push and PR (`.github/workflows/ci.yml`), and a `ts/v*` tag
+publishes to npm via OIDC trusted publishing
+(`.github/workflows/release.yml`). Workflow changes are staged in
+[`ci/`](ci/README.md) first — a maintainer moves them into `.github/`.
 
 Releasing bumps four version sites at once (`make version V=x.y.z`), then
 tags: `ts/vX.Y.Z` publishes to npm via OIDC trusted publishing, and

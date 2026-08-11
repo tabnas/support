@@ -119,8 +119,27 @@ publish-go:
 	# Both modules are tagged. go/adder is a nested module, so Go tooling
 	# can only discover its releases under go/adder/vX.Y.Z — tagging go/
 	# alone would leave the documented adder package unresolvable.
-	git tag go/v$(V)
-	git tag go/adder/v$(V)
+	#
+	# A tag already at HEAD is left alone rather than treated as an
+	# error, because a HALF-DONE release is a real state that this target
+	# has to be able to finish: 0.1.1 shipped with go/v0.1.1 tagged and
+	# go/adder/v0.1.1 missing, and `git tag` failing on the first of the
+	# two meant the second could never be created.
+	#
+	# A tag that exists on a DIFFERENT commit is still a hard stop. That
+	# means the version was released and the code has moved since, so the
+	# answer is a new version, not a moved tag.
+	@for T in go/v$(V) go/adder/v$(V); do \
+	  if git rev-parse -q --verify "refs/tags/$$T" >/dev/null; then \
+	    if [ "$$(git rev-parse "refs/tags/$$T^{commit}")" != "$$(git rev-parse HEAD)" ]; then \
+	      echo "tag $$T exists on a different commit — bump the version instead"; \
+	      exit 1; \
+	    fi; \
+	    echo "tag $$T already at HEAD — leaving it"; \
+	  else \
+	    git tag "$$T"; \
+	  fi; \
+	done
 	git push origin main go/v$(V) go/adder/v$(V)
 	@command -v gh >/dev/null 2>&1 && gh release create go/v$(V) --title "go/v$(V)" --notes "Go module release v$(V)" || true
 
