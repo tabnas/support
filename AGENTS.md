@@ -43,7 +43,7 @@ sides already matched.
    by importing `*tabnas.TabnasError`.
 3. **A behaviour difference between the runtimes is a defect until it is
    documented.** The unavoidable ones are marked **⚠ differs** in
-   `doc/reference.md`; there are five, and each says why. Adding a sixth
+   `doc/reference.md`; there are six, and each says why. Adding a seventh
    without documenting it silently breaks the guarantee the package
    exists to provide.
 

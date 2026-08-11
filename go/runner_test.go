@@ -328,3 +328,116 @@ func TestRunnerBadExpectedJSON(t *testing.T) {
 		t.Errorf("got %v", err)
 	}
 }
+
+func TestRunnerParseRow(t *testing.T) {
+	// The row-taking hook: a fixture whose other columns take part in the
+	// parse — an `opts` column of plugin options is the common one — needs
+	// more than the input string. TypeScript's `parse` simply takes the row
+	// as a second argument; Go has no optional parameter, so it is a
+	// separate field.
+	spec := mustParse(t, "o.tsv", strings.Join([]string{
+		"input\texpected\topts",
+		`a	"A"	upper`,
+		`b	"b"	`,
+	}, "\n"), nil)
+
+	r := Runner{ParseRow: func(s string, row *Row) (any, error) {
+		if "upper" == row.Named("opts") {
+			return strings.ToUpper(s), nil
+		}
+		return s, nil
+	}}
+
+	for i := range spec.Rows {
+		if err := check(t, r, spec, i); err != nil {
+			t.Errorf("row %d: %v", i, err)
+		}
+	}
+}
+
+func TestRunnerParseHookRequired(t *testing.T) {
+	// Neither hook set, and both hooks set, are both defects in the caller.
+	// Both-set is an error rather than a precedence rule: the two say
+	// different things about the same row, and running one of them quietly
+	// would hide that the other never ran.
+	spec := rowsFixture(t)
+	parse := func(string) (any, error) { return nil, nil }
+	parseRow := func(string, *Row) (any, error) { return nil, nil }
+
+	for name, c := range map[string]struct {
+		runner Runner
+		want   string
+	}{
+		"neither": {Runner{}, "Runner.Parse or Runner.ParseRow is required"},
+		"both": {
+			Runner{Parse: parse, ParseRow: parseRow},
+			"both set",
+		},
+	} {
+		if err := check(t, c.runner, spec, 0); nil == err ||
+			!strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: CheckRow err = %v", name, err)
+		}
+		// And said once at registration, rather than once per row.
+		if err := c.runner.CheckSpec(spec); nil == err ||
+			!strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: CheckSpec err = %v", name, err)
+		}
+	}
+}
+
+func TestRunnerMatchErrorHook(t *testing.T) {
+	// For a grammar with no stable code to pin: the hook replaces the code
+	// comparison, so `ERROR:bad_b` can be matched against the message.
+	// Without it such a fixture would have to weaken to a bare `ERROR`.
+	spec := rowsFixture(t)
+	seen := ""
+
+	r := Runner{
+		Parse: func(string) (any, error) {
+			return nil, errors.New("something bad_b happened")
+		},
+		// ErrorCode is deliberately set to a wrong answer: MatchError
+		// replaces the code comparison entirely, so this must not be read.
+		ErrorCode: func(error) string { return "WRONG" },
+		MatchError: func(err error, want string, row *Row) bool {
+			seen = row.Where()
+			return strings.Contains(err.Error(), want)
+		},
+	}
+
+	if err := check(t, r, spec, 1); err != nil {
+		t.Errorf("got %v", err)
+	}
+	if "t.tsv:3" != seen {
+		t.Errorf("MatchError row = %q", seen)
+	}
+
+	// A bare ERROR means "any error" and never reaches the hook.
+	seen = ""
+	if err := check(t, r, spec, 2); err != nil {
+		t.Errorf("bare ERROR: %v", err)
+	}
+	if "" != seen {
+		t.Errorf("bare ERROR consulted MatchError at %q", seen)
+	}
+}
+
+func TestRunnerMatchErrorRejects(t *testing.T) {
+	// And it must be able to FAIL a row: a hook that could only pass would
+	// turn every error fixture into a silent one.
+	r := Runner{
+		Parse:      func(string) (any, error) { return nil, errors.New("other") },
+		MatchError: func(err error, want string, _ *Row) bool { return false },
+	}
+
+	err := check(t, r, rowsFixture(t), 1)
+	if nil == err {
+		t.Fatal("expected a failure")
+	}
+	for _, want := range []string{"t.tsv:3", `does not match "bad_b"`, "other"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("message missing %q:\n%v", want, err)
+		}
+	}
+}
