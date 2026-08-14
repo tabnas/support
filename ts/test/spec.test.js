@@ -129,6 +129,17 @@ describe('spec-parse', () => {
     assert.deepEqual(crlf.header, lf.header)
   })
 
+  it('trims a CR at end of file, final newline missing', () => {
+    // CRLF endings with the last line unterminated: the final segment of
+    // the split keeps its CR, which the Go loader's per-line trim
+    // removes — so without stripping it here the two runtimes would
+    // disagree about the last column of the last row.
+    // `go/spec_test.go` pins the same bytes.
+    const spec = parseSpec('x.tsv', 'a\tb\r\n1\tERROR:foo\r')
+    assert.equal(spec.rows.length, 1)
+    assert.deepEqual(spec.rows[0].cols, ['1', 'ERROR:foo'])
+  })
+
   it('strips a leading BOM so the first column name still matches', () => {
     const spec = parseSpec('x.tsv', '\uFEFFinput\texpected\na\t1\n')
     assert.deepEqual(spec.header, ['input', 'expected'])

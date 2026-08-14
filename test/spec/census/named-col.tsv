@@ -1,0 +1,16 @@
+input	expected	note
+# named-col.tsv — the expectation is NOT the last column here.
+#
+#   input     ignored by the census.
+#   expected  the expectation cell, raw.
+#   note      free text — deliberately code-shaped in places.
+#
+# The note column baits the census's default last-column selection: read
+# without name 'expected' (or col 1), the trap codes below are collected
+# and the real ones missed — the mistake column selection exists to
+# prevent, and what both runtimes' census tests pin.
+{	ERROR:named_only	ERROR:trap_note
+# unexpected also appears in codes.tsv: unique across the directory.
+[	ERROR:unexpected	plain note
+x	{"x":1}	ERROR:trap_note
+y	ERROR:spaced out	ERROR:another_trap

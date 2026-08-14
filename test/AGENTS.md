@@ -20,6 +20,7 @@ all:
 |---|---|
 | `spec/adder/` | The adder grammar, through the full runner. `input` + `expected`, the ordinary two-column shape every other tabnas repo uses. |
 | `spec/util/` | The utilities themselves — the escape codec, expectation parsing, value comparison, and the loader's own row-shape rules. |
+| `spec/census/` | The census helpers — which expectation cells `codesInSpecDir` / `CodesInSpecDir` counts as codes, and how the expectation column is selected. |
 
 ## Format
 
@@ -78,17 +79,20 @@ neighbour. See [`doc/reference.md`](../doc/reference.md).
 | `spec/util/expect-error.tsv` | `ts/test/expect.test.js` | `go/expect_test.go` |
 | `spec/util/value-equal.tsv` | `ts/test/expect.test.js` | `go/expect_test.go` |
 | `spec/util/loader-rows.tsv` | `ts/test/spec.test.js` | `go/spec_test.go` |
+| `spec/census/codes.tsv` | `ts/test/census.test.js` | `go/census_test.go` |
+| `spec/census/named-col.tsv` | `ts/test/census.test.js` | `go/census_test.go` |
 
 `spec/adder/` is discovered by directory listing in both runtimes: adding a
 `.tsv` there runs it in both without touching either runner. The `util/`
-fixtures are named explicitly, because each has its own column shape.
+and `census/` fixtures are named explicitly, because each has its own
+column shape.
 
-**A `util/` fixture must be wired into both runtimes, and the census
-tests check it** (`go/census_test.go`, `ts/test/census.test.js`): each
-asserts that every `*.tsv` in `util/` is named somewhere in its own test
-sources, so adding a fixture and wiring up one side turns the other side
-red. A row only one runtime runs is agreed by nobody, which is the one
-thing this directory exists to prevent.
+**A `util/` or `census/` fixture must be wired into both runtimes, and
+the census tests check it** (`go/census_test.go`, `ts/test/census.test.js`):
+each asserts that every `*.tsv` in those directories is named somewhere in
+its own test sources, so adding a fixture and wiring up one side turns the
+other side red. A row only one runtime runs is agreed by nobody, which is
+the one thing this directory exists to prevent.
 
 `spec/util/loader-rows.tsv` is a **layout** fixture: both runtimes assert
 its rows sit on specific physical line numbers. Do not reflow it, and do

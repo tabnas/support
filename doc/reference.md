@@ -333,6 +333,65 @@ one red case per row. `spec` / `Spec` calls it first.
 > **⚠ differs.** TypeScript's checks throw; Go's return an `error`. Same
 > split as `row` / `CheckRow`, and each is its language's convention.
 
+## Census API
+
+Coverage and parity tripwires over error codes, for a consuming repo to
+run against its own data. Every input arrives as an argument — this
+package fetches no catalogue and imports no engine, because it depends
+on nothing and never will.
+
+| TypeScript | Go |
+|---|---|
+| `codesInSpecDir(dir, options?): string[]` | `CodesInSpecDir(dir string, opts CensusOpts) ([]string, error)` |
+| `compareCatalogues(a, b): CatalogueDiff` | `CompareCatalogues(a, b map[string]string) CatalogueDiff` |
+| `coverage(declared, exercised): CoverageReport` | `Coverage(declared, exercised []string) CoverageReport` |
+
+`codesInSpecDir` walks a fixture directory with the shared loader
+(`loadSpecDir`, so a missing or empty directory is an **error**, not "no
+codes") and returns the codes its expectation cells exercise: sorted,
+unique. Only a **code-style** cell counts — `ERROR:` followed by a bare
+`[a-z][a-z0-9_]*` token. A message-style expectation (`ERROR:bad token`,
+`ERROR:1:8`) and a bare `ERROR` assert a rejection without naming a
+code, and returning them would count coverage that is not there.
+
+The expectation column defaults to each **row's last column**; select it
+with `col` / `Col` (position) or `name` / `Name` (header name, which
+wins when set). An unknown name is an error — the same caller defect
+`resolve` and the runner report. Go's `Col` is a `*int` for the same
+reason `Runner.Input` is: 0 is a real column, and a plain `int` could
+not tell it from "not set". `Int(0)` builds one.
+
+`compareCatalogues` diffs two `{code: template}` maps — message
+catalogues, hint catalogues, or one runtime's against the other's:
+
+| TypeScript | Go | Meaning |
+|---|---|---|
+| `missing` | `Missing` | Keys of `a` absent in `b`. |
+| `extra` | `Extra` | Keys of `b` absent in `a`. |
+| `templateMismatch` | `TemplateMismatch` | Shared keys whose templates differ **byte for byte**. |
+
+Byte-for-byte is deliberate: two templates that merely "mean the same"
+have still drifted, and the byte diff is what a maintainer has to
+reconcile.
+
+`coverage` compares the codes a package declares against the codes its
+fixtures exercise (typically `codesInSpecDir`'s answer — whether
+inherited base codes count as declared is the caller's choice):
+
+| TypeScript | Go | Meaning |
+|---|---|---|
+| `uncovered` | `Uncovered` | Declared, but exercised by no fixture. |
+| `orphan` | `Orphan` | Exercised, but declared by nobody. |
+
+Every list in every census answer is sorted **by code point**, and empty
+rather than absent (`[]` in TypeScript, a non-nil empty slice in Go)
+when there is nothing to report, so the two runtimes render the same
+answer the same way. Code point is deliberate: Go's `sort.Strings`
+compares UTF-8 bytes, which for valid UTF-8 *is* code-point order, while
+TypeScript's default sort compares UTF-16 code units and would order a
+non-BMP catalogue key differently — so the TypeScript census supplies
+its own comparator instead.
+
 ## The adder grammar
 
 A plugin, in both runtimes, holding the integer-addition grammar from the

@@ -1,0 +1,28 @@
+input	expected
+# codes.tsv — which expectation cells the code census counts.
+#
+#   input     ignored by the census; present so the file keeps the
+#             ordinary two-column shape, expectation last.
+#   expected  the expectation cell, raw.
+#
+# Only a code-style cell counts: ERROR:<code> where <code> is a bare
+# [a-z][a-z0-9_]* token. Everything else below asserts something a code
+# census must not count.
+{	ERROR:unexpected
+[	ERROR:unterminated_string
+# A duplicate contributes nothing new: the census answer is unique.
+{{	ERROR:unexpected
+# Message- and position-style expectations are rejections, not codes.
+q	ERROR:bad token
+p	ERROR:1:8
+u	ERROR:Unexpected
+n	ERROR:_leading
+d	ERROR:9lives
+# A bare ERROR (and an empty code) pin only "it failed".
+z	ERROR
+e	ERROR:
+# Value rows and near-misses are not error expectations at all.
+a	{"a":1}
+b	null
+s	"ERROR:looks_quoted"
+w	ERRORS

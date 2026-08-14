@@ -40,3 +40,8 @@ export type { EqualOptions } from './expect'
 
 export { SpecRunner, makeRunner } from './runner'
 export type { RunnerOptions } from './runner'
+
+export { codesInSpecDir, compareCatalogues, coverage } from './census'
+export type {
+  CensusOptions, CatalogueDiff, CoverageReport,
+} from './census'
