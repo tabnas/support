@@ -158,6 +158,14 @@ export function parseSpec(
   }
 
   const lines = text.split(/\r?\n/)
+
+  // Only the FINAL segment can still carry a CR: every other one was
+  // terminated by \r?\n, which consumed it. The Go loader trims a CR
+  // from every line, so without this a file whose bytes end "...\r" —
+  // CRLF endings, final newline missing — would put a stray CR in the
+  // last column here and not there.
+  lines[lines.length - 1] = lines[lines.length - 1].replace(/\r$/, '')
+
   const name = basename(file)
 
   let header: string[] = []

@@ -175,6 +175,22 @@ func TestParseSpecCRLF(t *testing.T) {
 	}
 }
 
+// TestParseSpecCRAtEOF pins the CR-at-EOF case: CRLF endings with the
+// last line unterminated. The per-line trim removes the final CR here;
+// the TS loader strips it from the final segment of its split. Without
+// both, the two runtimes would disagree about the last column of the
+// last row. ts/test/spec.test.js pins the same bytes.
+func TestParseSpecCRAtEOF(t *testing.T) {
+	spec := mustParse(t, "x.tsv", "a\tb\r\n1\tERROR:foo\r", nil)
+
+	if 1 != len(spec.Rows) {
+		t.Fatalf("rows: got %d", len(spec.Rows))
+	}
+	if want := []string{"1", "ERROR:foo"}; !reflect.DeepEqual(spec.Rows[0].Cols, want) {
+		t.Errorf("cols: got %v", spec.Rows[0].Cols)
+	}
+}
+
 func TestParseSpecStripsBOM(t *testing.T) {
 	spec := mustParse(t, "x.tsv", "\ufeffinput\texpected\na\t1\n", nil)
 

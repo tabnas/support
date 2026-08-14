@@ -24,8 +24,8 @@ sides already matched.
 
 | Path | What it is |
 |---|---|
-| `ts/` | **Canonical** TypeScript package (`@tabnas/support`). Source in `src/`: `escape.ts`, `spec.ts`, `expect.ts`, `runner.ts`, the `support.ts` entry point, and `adder.ts`. |
-| `go/` | Go port. Module `github.com/tabnas/support/go`, **no dependencies**. Same four files: `escape.go`, `spec.go`, `expect.go`, `runner.go`, plus `support.go` for the package doc, `VERSION` and the pointer helpers. |
+| `ts/` | **Canonical** TypeScript package (`@tabnas/support`). Source in `src/`: `escape.ts`, `spec.ts`, `expect.ts`, `runner.ts`, `census.ts`, the `support.ts` entry point, and `adder.ts`. |
+| `go/` | Go port. Module `github.com/tabnas/support/go`, **no dependencies**. Same files: `escape.go`, `spec.go`, `expect.go`, `runner.go`, `census.go`, plus `support.go` for the package doc, `VERSION` and the pointer helpers. |
 | `go/adder/` | **Separate module** (`github.com/tabnas/support/go/adder`) holding the adder grammar, which needs the parser. |
 | `test/spec/` | Shared `.tsv` fixtures. See [`test/AGENTS.md`](test/AGENTS.md). |
 | `doc/reference.md` | The fixture format and the full API in both languages, side by side. |
@@ -95,13 +95,43 @@ sides already matched.
 - **Every shared fixture must run in BOTH runtimes**, and the census
   tests (`go/census_test.go`, `ts/test/census.test.js`) enforce it.
   `test/spec/adder/` is discovered by directory listing in both, so a
-  fixture added there runs in both automatically. `test/spec/util/`
-  cannot be — each file has its own column shape and assertion, so each
-  suite names the files it runs, and a fixture wired into one runtime
-  only would otherwise be silent. The census is a static tripwire, not
-  proof: it checks the fixture's name appears in that runtime's test
-  sources, so a name in a comment would satisfy it. It catches the
-  realistic mistake, which nothing else here would.
+  fixture added there runs in both automatically. `test/spec/util/` and
+  `test/spec/census/` cannot be — each file has its own column shape and
+  assertion, so each suite names the files it runs, and a fixture wired
+  into one runtime only would otherwise be silent. The census is a
+  static tripwire, not proof: it checks the fixture's name appears in
+  that runtime's test sources, so a name in a comment would satisfy it.
+  It catches the realistic mistake, which nothing else here would.
+
+## The census helpers
+
+`ts/src/census.ts` and `go/census.go` hold the coverage/parity
+tripwires a consuming repo runs over its own data:
+
+- `codesInSpecDir(dir, opts)` / `CodesInSpecDir` walks a fixture
+  directory with the shared loader and returns the error codes its
+  expectation cells exercise, sorted and unique. Only a **code-style**
+  cell counts — `ERROR:` followed by a bare `[a-z][a-z0-9_]*` token. A
+  message-style expectation (`ERROR:bad token`, `ERROR:1:8`) and a bare
+  `ERROR` assert a rejection without naming a code, and returning them
+  would count coverage that is not there. `opts` selects the
+  expectation column by position or header name; the default is each
+  row's last column.
+- `compareCatalogues(a, b)` / `CompareCatalogues` diffs two
+  `{code: template}` maps — message catalogues, hint catalogues, or one
+  runtime's against the other's: keys of `a` absent in `b` (`missing`),
+  keys of `b` absent in `a` (`extra`), and shared keys whose templates
+  differ byte for byte (`templateMismatch`).
+- `coverage(declared, exercised)` / `Coverage` reports declared codes
+  no fixture exercises (`uncovered`) and exercised codes nobody
+  declares (`orphan`). Whether inherited base codes count as declared
+  is the caller's choice — pass them in or leave them out.
+
+Every input arrives as an argument. Nothing here fetches a catalogue or
+imports the engine — rule 2 above — which is exactly why these helpers
+can live in the one module every repo already depends on. Their
+fixtures are `test/spec/census/`, a named-file family like `util/`,
+covered by the same census tests.
 
 ## The mini plugin
 
