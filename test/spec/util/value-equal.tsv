@@ -7,11 +7,32 @@ a	b	equal
 #   equal   JSON boolean: must equalValue(a, b) hold?
 1	1	true
 1	2	false
-# Zero has one value here, however the runtime spells it. The expected
-# column is written with JavaScript JSON.stringify semantics, which
-# renders -0 as 0, so a Go result of -0 must still match.
-0	-0	true
+# SIGNED ZERO IS IN THE VALUE CONTRACT (ADR-15).
+#
+# -0 is representable and distinguishable in both runtimes, and a parser
+# that reports 0 for the input -0 has lost information the source carried.
+# So these do NOT compare equal, and -0 is pinnable in a fixture.
+#
+# This row used to say `true`, justified by the FORMATTER: JSON.stringify
+# and json.Marshal both render -0 as "0", so the comparator was made lossy
+# to match what the failure message could spell. The formatter now spells
+# -0, and the comparator no longer has to lie.
+#
+# Every other finite number still compares by value, not by bit pattern:
+# the two differ only at zero, and at NaN, which is equal to itself here
+# whatever its payload.
+0	-0	false
+-0	0	false
 -0	-0	true
+0	0	true
+# Signed zero inside a structure, where a short-circuit on the container
+# would hide it.
+[0]	[-0]	false
+[-0]	[-0]	true
+{"a":-0}	{"a":0}	false
+{"a":-0}	{"a":-0}	true
+# -0.0 and -0 are the same double, so notation still does not matter.
+-0.0	-0	true
 # A number is a number whatever its notation, and whatever integer or
 # floating-point type the runtime picked to hold it.
 1.0	1	true

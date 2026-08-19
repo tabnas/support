@@ -336,6 +336,13 @@ func TestFormatValue(t *testing.T) {
 		{"text", `"text"`},
 		{1.5, "1.5"},
 
+		// json.Marshal renders -0 as "0". Since ADR-15 made the two
+		// distinguishable, a signed-zero mismatch would otherwise report
+		// "got 0, expected 0" — a failure message that reads as a bug in
+		// the runner rather than a real difference.
+		{math.Copysign(0, -1), "-0"},
+		{0.0, "0"},
+
 		// json.Marshal refuses NaN; a failure message still has to say
 		// something, since throwing here would replace the real failure
 		// with a mystery.

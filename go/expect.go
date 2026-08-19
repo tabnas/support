@@ -149,10 +149,25 @@ func widenNumbers(v any) any {
 }
 
 // EqualValue compares two values with JSON semantics: structural,
-// key-order independent, -0 equal to 0, an integer equal to the float of
-// the same magnitude (Go grammars produce both, encoding/json produces
-// only float64), and NaN equal to itself — which == is not, and which a
-// fixture cannot express in JSON but an in-language case can.
+// key-order independent, an integer equal to the float of the same
+// magnitude (Go grammars produce both, encoding/json produces only
+// float64), NaN equal to itself — which == is not, and which a fixture
+// cannot express in JSON but an in-language case can — and -0 NOT equal
+// to 0.
+//
+// Those last two are the two halves of ADR-15, and they go opposite ways
+// on purpose.
+//
+// Map key order is OUT of the parsed-value contract. TypeScript cannot
+// preserve integer-like key order in a plain object — that is ECMAScript's
+// own property-ordering rule, not a porting choice — so making order
+// contractual would force that port to return an order-preserving
+// container, a breaking change for every consumer, to pin a property no
+// format in the fleet defines as significant.
+//
+// Signed zero is IN it. -0 is representable and distinguishable in both
+// runtimes, and a parser that reports 0 for the input -0 has lost
+// information the source carried.
 func EqualValue(got, expected any) bool {
 	return equalValue(got, expected, nil)
 }
@@ -187,7 +202,12 @@ func equalValue(a, b any, norm func(any) any) bool {
 		if math.IsNaN(an) && math.IsNaN(bn) {
 			return true
 		}
-		return an == bn
+		// By IEEE bits, not ==, because 0 == -0 is true and signed zero is
+		// part of the value contract (ADR-15): a parser that reports 0 for
+		// the input -0 has lost information the source carried. Every other
+		// finite double has a unique bit pattern, so for those this is
+		// exactly ==; NaN is handled above, where payloads must not matter.
+		return math.Float64bits(an) == math.Float64bits(bn)
 	}
 
 	switch av := a.(type) {
@@ -314,6 +334,13 @@ func asFloat(v any) (float64, bool) {
 func FormatValue(val any) string {
 	if nil == val {
 		return "nil"
+	}
+	// json.Marshal renders -0 as "0", so a signed-zero mismatch would report
+	// "got 0, expected 0" — a failure message that reads as a bug in the
+	// runner. Since ADR-15 made the two distinguishable, the formatter has
+	// to be able to spell the difference.
+	if n, ok := asFloat(val); ok && 0 == n && math.Signbit(n) {
+		return "-0"
 	}
 	if b, err := json.Marshal(val); nil == err {
 		return string(b)

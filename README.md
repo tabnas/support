@@ -54,8 +54,8 @@ Both runtimes expose the same four things:
   numbers for failure messages, and directory discovery.
 - **The expectation helpers.** `ERROR:<code>` parsing, `expected`-as-JSON
   parsing, and a JSON-semantics value comparison (key-order independent,
-  `-0` equal to `0`, `NaN` equal to itself, an integer equal to the float
-  of the same magnitude).
+  `-0` NOT equal to `0`, `NaN` equal to itself, an integer equal to the
+  float of the same magnitude).
 - **The runner.** Fixture rows in, `node:test` / `*testing.T` subtests
   out, with the file and line in every failure message.
 

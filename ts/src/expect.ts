@@ -72,9 +72,23 @@ export type EqualOptions = {
 
 
 // Compare two values with JSON semantics: structural, key-order
-// independent, `-0` equal to `0`, and `NaN` equal to itself (which `===`
-// is not, and which a fixture cannot express in JSON but an in-language
-// case can).
+// independent, `NaN` equal to itself (which `===` is not, and which a
+// fixture cannot express in JSON but an in-language case can), and `-0`
+// NOT equal to `0`.
+//
+// Those last two are the two halves of ADR-15, and they go opposite ways
+// on purpose.
+//
+// Map key order is OUT of the parsed-value contract. TypeScript cannot
+// preserve integer-like key order in a plain object — that is ECMAScript's
+// own property-ordering rule, not a porting choice — so making order
+// contractual would force this port to return an order-preserving
+// container, a breaking change for every consumer, to pin a property no
+// format in the fleet defines as significant.
+//
+// Signed zero is IN it. `-0` is representable and distinguishable in both
+// runtimes, and a parser that reports `0` for the input `-0` has lost
+// information the source carried.
 export function equalValue(
   got: unknown, expected: unknown, options?: EqualOptions,
 ): boolean {
@@ -91,12 +105,17 @@ function deepEqual(
     b = norm(b)
   }
 
-  if (a === b) {
-    return true // Covers primitives, and 0 === -0.
+  // Numbers first, BEFORE the `===` shortcut, because `0 === -0` is true
+  // and signed zero is part of the value contract (ADR-15): a parser that
+  // reports `0` for the input `-0` has lost information the source carried.
+  // `Object.is` separates them, and treats NaN as equal to itself, which is
+  // the other place `===` gives the wrong answer for a fixture.
+  if ('number' === typeof a || 'number' === typeof b) {
+    return 'number' === typeof a && 'number' === typeof b && Object.is(a, b)
   }
 
-  if ('number' === typeof a && 'number' === typeof b) {
-    return Number.isNaN(a) && Number.isNaN(b)
+  if (a === b) {
+    return true // Covers the remaining primitives.
   }
 
   if (null == a || null == b) {
@@ -151,6 +170,13 @@ function deepEqual(
 export function formatValue(val: unknown): string {
   if (undefined === val) {
     return 'undefined'
+  }
+  // JSON.stringify renders -0 as "0", so a signed-zero mismatch would
+  // report "got 0, expected 0" — a failure message that reads as a bug in
+  // the runner. Since ADR-15 made the two distinguishable, the formatter
+  // has to be able to spell the difference.
+  if (Object.is(val, -0)) {
+    return '-0'
   }
   try {
     const out = JSON.stringify(val)

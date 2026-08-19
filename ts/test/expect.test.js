@@ -156,6 +156,14 @@ describe('expect-equal', () => {
     assert.equal(formatValue(undefined), 'undefined')
     assert.equal(formatValue(null), 'null')
 
+    // JSON.stringify renders -0 as "0". Since ADR-15 made the two
+    // distinguishable, a signed-zero mismatch would otherwise report
+    // "got 0, expected 0" — a failure message that reads as a bug in the
+    // runner rather than a real difference.
+    assert.equal(formatValue(-0), '-0')
+    assert.equal(formatValue(0), '0')
+    assert.equal(formatValue([-0]), '[0]')
+
     // A value JSON cannot render still has to produce something readable:
     // this runs inside a failure message, where throwing again would
     // replace the real failure with a mystery.
