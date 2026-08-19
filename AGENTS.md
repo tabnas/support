@@ -111,7 +111,8 @@ tripwires a consuming repo runs over its own data:
 - `codesInSpecDir(dir, opts)` / `CodesInSpecDir` walks a fixture
   directory with the shared loader and returns the error codes its
   expectation cells exercise, sorted and unique. Only a **code-style**
-  cell counts — `ERROR:` followed by a bare `[a-z][a-z0-9_]*` token. A
+  cell counts — `ERROR:` followed by a bare `[a-z][a-z0-9_]*` token,
+  after any `@<row>:<col>` position suffix is stripped. A
   message-style expectation (`ERROR:bad token`, `ERROR:1:8`) and a bare
   `ERROR` assert a rejection without naming a code, and returning them
   would count coverage that is not there. `opts` selects the

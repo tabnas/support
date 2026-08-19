@@ -60,6 +60,12 @@ that must be rejected with that code. A bare `ERROR` accepts any code.
 The code is part of the contract, not just "it threw": two runtimes that
 reject the same source for different reasons have not agreed on anything.
 
+Add `@<row>:<col>` to pin where the error is reported as well:
+`ERROR:unexpected@1:8`. A code alone does not pin a diagnostic — two
+runtimes can agree on `unexpected` and disagree on where they say it
+happened. Opt-in: a cell with no `@` suffix is checked exactly as before.
+Write `ERROR:@1:8` to pin only the position.
+
 Write `null` rather than leaving a cell empty when the value really is
 null. An empty cell means "no value", and TypeScript reads that as
 `undefined` while Go — which has no `undefined` — reads it as `nil`.

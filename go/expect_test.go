@@ -49,9 +49,50 @@ func TestExpectErrorSpec(t *testing.T) {
 				t.Errorf("%s: ErrorCode(%q) = %q, want %q",
 					row.Where(), cell, code, wantCode)
 			}
-		} else if nil == codeErr {
-			t.Errorf("%s: ErrorCode(%q) should reject a non-error cell",
-				row.Where(), cell)
+
+			// The position channel. row/col are empty for a cell that
+			// pins no position, and ParseExpect reads an empty cell as
+			// nil — so wantPos below is false exactly when the cell pins
+			// nothing, and both kinds of row are checked by the same
+			// assertions. Neither kind can go unchecked.
+			ee, eeErr := ErrorExpect(cell)
+			if nil != eeErr {
+				t.Errorf("%s: ErrorExpect(%q): %v", row.Where(), cell, eeErr)
+				continue
+			}
+			wantRow, err := ParseExpect(row.Named("row"))
+			if err != nil {
+				t.Fatalf("%s: %v", row.Where(), err)
+			}
+			wantCol, err := ParseExpect(row.Named("col"))
+			if err != nil {
+				t.Fatalf("%s: %v", row.Where(), err)
+			}
+
+			wantPos := nil != wantRow
+			if ee.HasPos != wantPos {
+				t.Errorf("%s: ErrorExpect(%q).HasPos = %v, want %v",
+					row.Where(), cell, ee.HasPos, wantPos)
+				continue
+			}
+			if !wantPos {
+				continue
+			}
+
+			// ParseExpect reads a JSON number as float64.
+			if float64(ee.Row) != wantRow || float64(ee.Col) != wantCol {
+				t.Errorf("%s: ErrorExpect(%q) = %d:%d, want %v:%v",
+					row.Where(), cell, ee.Row, ee.Col, wantRow, wantCol)
+			}
+		} else {
+			if nil == codeErr {
+				t.Errorf("%s: ErrorCode(%q) should reject a non-error cell",
+					row.Where(), cell)
+			}
+			if _, err := ErrorExpect(cell); nil == err {
+				t.Errorf("%s: ErrorExpect(%q) should reject a non-error cell",
+					row.Where(), cell)
+			}
 		}
 	}
 }

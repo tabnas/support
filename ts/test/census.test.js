@@ -91,19 +91,21 @@ describe('census-codes', () => {
 
   it('collects code-style expectations only: sorted, unique', () => {
     // With the expectation column named, both files are read right:
-    // codes.tsv contributes unexpected and unterminated_string (its
-    // message-style, bare-ERROR and value rows contribute nothing), and
-    // named-col.tsv contributes named_only plus a repeat of unexpected.
+    // codes.tsv contributes unexpected, unterminated_string and
+    // positioned (its message-style, bare-ERROR and value rows contribute
+    // nothing), and named-col.tsv contributes named_only plus a repeat of
+    // unexpected. `positioned` is written `ERROR:positioned@2:5`: a code
+    // with a position suffix is still a code.
     assert.deepEqual(codesInSpecDir(Path.join(SPEC, 'census'), {
       name: 'expected',
-    }), ['named_only', 'unexpected', 'unterminated_string'])
+    }), ['named_only', 'positioned', 'unexpected', 'unterminated_string'])
   })
 
   it('selects the expectation column by position', () => {
     // Column 1 is `expected` in both files, so the answer is the same.
     assert.deepEqual(codesInSpecDir(Path.join(SPEC, 'census'), {
       col: 1,
-    }), ['named_only', 'unexpected', 'unterminated_string'])
+    }), ['named_only', 'positioned', 'unexpected', 'unterminated_string'])
   })
 
   it('defaults to each row\'s last column', () => {
@@ -112,7 +114,8 @@ describe('census-codes', () => {
     // codes are missed — the mistake the column selection exists to
     // prevent, pinned so it stays visible.
     assert.deepEqual(codesInSpecDir(Path.join(SPEC, 'census')),
-      ['another_trap', 'trap_note', 'unexpected', 'unterminated_string'])
+      ['another_trap', 'positioned', 'trap_note', 'unexpected',
+        'unterminated_string'])
   })
 
   it('rejects an unknown column name', () => {
@@ -211,7 +214,8 @@ describe('census-coverage', () => {
     })
     assert.deepEqual(
       coverage(
-        ['named_only', 'unexpected', 'unreached', 'unterminated_string'],
+        ['named_only', 'positioned', 'unexpected', 'unreached',
+          'unterminated_string'],
         exercised),
       { uncovered: ['unreached'], orphan: [] })
   })

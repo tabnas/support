@@ -19,7 +19,7 @@ import {
 } from './spec'
 
 import {
-  isErrorExpect, errorCode, parseExpect, equalValue, formatValue,
+  isErrorExpect, errorExpect, parseExpect, equalValue, formatValue,
 } from './expect'
 
 
@@ -46,7 +46,22 @@ export type RunnerOptions = {
   // than "it failed".
   //
   // A bare `ERROR` cell still means "any error", and does not reach here.
+  // Nor does a trailing `@<row>:<col>`: `want` is the code with any
+  // position expectation already stripped, so a hook written before the
+  // position channel existed sees exactly what it saw before.
   matchError?: (err: unknown, want: string, row: SpecRow) => boolean
+
+  // The 1-based source position a thrown error reports. Only needed for
+  // fixtures with `ERROR:<code>@<row>:<col>` rows; the default reads
+  // `err.row` and `err.col`, which is what `TabnasError` exposes.
+  //
+  // Position is checked independently of `matchError`. The two are
+  // separate channels — how a failure is identified, and where it is
+  // reported — and a runner that has to match its codes by hand should not
+  // thereby lose the ability to pin a position.
+  errorPos?: (
+    err: unknown, row: SpecRow,
+  ) => { row?: number, col?: number } | undefined
 
   // Read the expected cell, when the fixture's vocabulary is wider than
   // JSON. It replaces `parseExpect`, and is reached only for a value row
@@ -140,7 +155,7 @@ export class SpecRunner {
     const opts = this.options
 
     if (isErrorExpect(expected)) {
-      const want = errorCode(expected)
+      const want = errorExpect(expected)
       let threw: unknown = null
       let got: unknown = undefined
       let ok = false
@@ -159,12 +174,12 @@ export class SpecRunner {
           `with ${expected}, but returned ${formatValue(got)}`)
       }
 
-      if ('' !== want) {
+      if ('' !== want.code) {
         if (opts.matchError) {
-          if (!opts.matchError(threw, want, row)) {
+          if (!opts.matchError(threw, want.code, row)) {
             throw new Error(
               `${row.where()}: parse(${JSON.stringify(input)}) failed, but ` +
-              `the error does not match ${JSON.stringify(want)}` +
+              `the error does not match ${JSON.stringify(want.code)}` +
               `\n  error: ${threw}`)
           }
         }
@@ -172,12 +187,29 @@ export class SpecRunner {
           const code = opts.errorCode
             ? opts.errorCode(threw, row)
             : (threw as any)?.code
-          if (code !== want) {
+          if (code !== want.code) {
             throw new Error(
               `${row.where()}: parse(${JSON.stringify(input)}) failed with ` +
-              `code ${formatValue(code)}, expected ${JSON.stringify(want)}` +
+              `code ${formatValue(code)}, expected ` +
+              `${JSON.stringify(want.code)}` +
               `\n  error: ${threw}`)
           }
+        }
+      }
+
+      if (null != want.row) {
+        const at = opts.errorPos
+          ? opts.errorPos(threw, row)
+          : (threw as any)
+        // A missing position is a mismatch, not a pass. The whole point of
+        // the channel is that an error which cannot say where it happened
+        // has not met an expectation that says where it must.
+        if (at?.row !== want.row || at?.col !== want.col) {
+          throw new Error(
+            `${row.where()}: parse(${JSON.stringify(input)}) failed at ` +
+            `${formatValue(at?.row)}:${formatValue(at?.col)}, expected ` +
+            `${want.row}:${want.col}` +
+            `\n  error: ${threw}`)
         }
       }
 

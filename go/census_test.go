@@ -120,10 +120,14 @@ func TestCodesInSpecDir(t *testing.T) {
 	dir := filepath.Join(specDir(t), "census")
 
 	// With the expectation column named, both files are read right:
-	// codes.tsv contributes unexpected and unterminated_string (its
-	// message-style, bare-ERROR and value rows contribute nothing), and
-	// named-col.tsv contributes named_only plus a repeat of unexpected.
-	want := []string{"named_only", "unexpected", "unterminated_string"}
+	// codes.tsv contributes unexpected, unterminated_string and
+	// positioned (its message-style, bare-ERROR and value rows contribute
+	// nothing), and named-col.tsv contributes named_only plus a repeat of
+	// unexpected. positioned is written ERROR:positioned@2:5 — a code with
+	// a position suffix is still a code.
+	want := []string{
+		"named_only", "positioned", "unexpected", "unterminated_string",
+	}
 
 	got, err := CodesInSpecDir(dir, CensusOpts{Name: "expected"})
 	if err != nil {
@@ -147,7 +151,8 @@ func TestCodesInSpecDir(t *testing.T) {
 	// then collected and whose real codes are missed — the mistake the
 	// column selection exists to prevent, pinned so it stays visible.
 	wantLast := []string{
-		"another_trap", "trap_note", "unexpected", "unterminated_string",
+		"another_trap", "positioned", "trap_note", "unexpected",
+		"unterminated_string",
 	}
 	got, err = CodesInSpecDir(dir, CensusOpts{})
 	if err != nil {
@@ -283,7 +288,10 @@ func TestCoverageTiesOutAgainstCodeCensus(t *testing.T) {
 	}
 
 	got := Coverage(
-		[]string{"named_only", "unexpected", "unreached", "unterminated_string"},
+		[]string{
+			"named_only", "positioned", "unexpected", "unreached",
+			"unterminated_string",
+		},
 		exercised)
 	want := CoverageReport{
 		Uncovered: []string{"unreached"},

@@ -52,7 +52,22 @@ type Runner struct {
 	// nothing more than "it failed".
 	//
 	// A bare ERROR cell still means "any error", and does not reach here.
+	// Nor does a trailing @<row>:<col>: want is the code with any position
+	// expectation already stripped, so a hook written before the position
+	// channel existed sees exactly what it saw before.
 	MatchError func(err error, want string, row *Row) bool
+
+	// ErrorPos reports the 1-based source position a parse error names.
+	// Only needed for fixtures with ERROR:<code>@<row>:<col> rows; the
+	// default reads Row and Col fields (or Row()/Col() methods), which is
+	// what *TabnasError carries. ok is false when the error names no
+	// position at all.
+	//
+	// Position is checked independently of MatchError. The two are
+	// separate channels — how a failure is identified, and where it is
+	// reported — and a runner that has to match its codes by hand should
+	// not thereby lose the ability to pin a position.
+	ErrorPos func(err error) (row, col int, ok bool)
 
 	// ParseExpected reads the expected cell, when the fixture's vocabulary
 	// is wider than JSON. It replaces ParseExpect, and is reached only for
@@ -200,7 +215,7 @@ func (r Runner) CheckRow(row *Row, input, expected string) error {
 	}
 
 	if IsErrorExpect(expected) {
-		want, err := ErrorCode(expected)
+		want, err := ErrorExpect(expected)
 		if err != nil {
 			return fmt.Errorf("%s: %w", row.Where(), err)
 		}
@@ -212,23 +227,43 @@ func (r Runner) CheckRow(row *Row, input, expected string) error {
 				row.Where(), input, expected, FormatValue(got))
 		}
 
-		if "" != want {
+		if "" != want.Code {
 			if nil != r.MatchError {
-				if !r.MatchError(parseErr, want, row) {
+				if !r.MatchError(parseErr, want.Code, row) {
 					return fmt.Errorf(
 						"%s: Parse(%q) failed, but the error does not match %q\n  error: %v",
-						row.Where(), input, want, parseErr)
+						row.Where(), input, want.Code, parseErr)
 				}
 			} else {
 				code := errCode(parseErr)
 				if nil != r.ErrorCode {
 					code = r.ErrorCode(parseErr)
 				}
-				if code != want {
+				if code != want.Code {
 					return fmt.Errorf(
 						"%s: Parse(%q) failed with code %q, expected %q\n  error: %v",
-						row.Where(), input, code, want, parseErr)
+						row.Where(), input, code, want.Code, parseErr)
 				}
+			}
+		}
+
+		if want.HasPos {
+			gotRow, gotCol, ok := errPos(parseErr)
+			if nil != r.ErrorPos {
+				gotRow, gotCol, ok = r.ErrorPos(parseErr)
+			}
+			// An error that names no position is a mismatch, not a pass.
+			// The whole point of the channel is that an error which cannot
+			// say where it happened has not met an expectation that says
+			// where it must.
+			if !ok || gotRow != want.Row || gotCol != want.Col {
+				at := fmt.Sprintf("%d:%d", gotRow, gotCol)
+				if !ok {
+					at = "no position"
+				}
+				return fmt.Errorf(
+					"%s: Parse(%q) failed at %s, expected %d:%d\n  error: %v",
+					row.Where(), input, at, want.Row, want.Col, parseErr)
 			}
 		}
 
@@ -346,4 +381,50 @@ func fieldCode(err error) string {
 	}
 
 	return f.String()
+}
+
+// errPos reads the 1-based source position off a parse error, mirroring
+// errCode: an interface first, then a struct field, so an error type that
+// exposes either shape works without the suite writing a hook.
+//
+// ok is false when the error names no position, which the caller must
+// treat as a mismatch rather than a pass.
+func errPos(err error) (row, col int, ok bool) {
+	if nil == err {
+		return 0, 0, false
+	}
+
+	if p, is := err.(interface {
+		Row() int
+		Col() int
+	}); is {
+		return p.Row(), p.Col(), true
+	}
+
+	return fieldPos(err)
+}
+
+// fieldPos reads int `Row` and `Col` fields off an error struct (or a
+// pointer to one), which is the shape *TabnasError has.
+func fieldPos(err error) (row, col int, ok bool) {
+	v := reflect.ValueOf(err)
+
+	if reflect.Ptr == v.Kind() {
+		if v.IsNil() {
+			return 0, 0, false
+		}
+		v = v.Elem()
+	}
+
+	if reflect.Struct != v.Kind() {
+		return 0, 0, false
+	}
+
+	rf, cf := v.FieldByName("Row"), v.FieldByName("Col")
+	if !rf.IsValid() || !cf.IsValid() ||
+		reflect.Int != rf.Kind() || reflect.Int != cf.Kind() {
+		return 0, 0, false
+	}
+
+	return int(rf.Int()), int(cf.Int()), true
 }

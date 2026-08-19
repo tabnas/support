@@ -12,6 +12,11 @@ input	expected
 [	ERROR:unterminated_string
 # A duplicate contributes nothing new: the census answer is unique.
 {{	ERROR:unexpected
+# A code with a POSITION suffix is still a code: the suffix pins where the
+# error is reported, and stripping it is what keeps a fixture that pins a
+# position inside the code census. Without this row, adding @1:8 to an
+# expectation would silently drop that code from coverage.
+z	ERROR:positioned@2:5
 # Message- and position-style expectations are rejections, not codes.
 q	ERROR:bad token
 p	ERROR:1:8

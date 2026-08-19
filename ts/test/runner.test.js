@@ -290,3 +290,92 @@ describe('runner', () => {
     assert.match(err.message, /invalid expected JSON/)
   })
 })
+
+
+// --- The position channel: ERROR:<code>@<row>:<col> ---
+//
+// A code alone does not pin a diagnostic. These tests exist because the
+// channel is only worth having if a WRONG position fails: a check that
+// cannot fail is the bug it was added to prevent.
+//
+// `go/runner_test.go` mirrors every case here.
+describe('runner-position', () => {
+
+  const spec = parseSpec('t.tsv', [
+    'input\texpected',
+    'b\tERROR:bad_b@1:8',
+    'b\tERROR:@1:8',
+    'b\tERROR:bad_b',
+  ].join('\n'))
+
+  // Carries its position the way `TabnasError` does, as plain `row`/`col`
+  // properties, so the runner's default reader has to find them with no
+  // hook configured.
+  const err = (code, row, col) =>
+    Object.assign(new Error(code), { code, row, col })
+
+  const thrower = (e) => makeRunner({ parse: () => { throw e } })
+
+  it('passes a pinned position', () => {
+    assert.equal(check(thrower(err('bad_b', 1, 8)), spec, 0), null)
+  })
+
+  it('fails the right code at the wrong place', () => {
+    // The exact shape the fleet audit found: every code row green, the
+    // positions disagreeing.
+    const got = check(thrower(err('bad_b', 1, 9)), spec, 0)
+    assert.ok(got, 'expected a failure: right code, wrong column')
+    assert.match(got.message, /failed at 1:9, expected 1:8/)
+  })
+
+  it('fails an error carrying no position', () => {
+    // The right code, so the code check passes and the position check is
+    // what has to reject this row. Passing here would make the channel
+    // silently optional, which is worse than not having it.
+    const bare = Object.assign(new Error('bad_b'), { code: 'bad_b' })
+    const got = check(thrower(bare), spec, 0)
+    assert.ok(got, 'expected a failure: error carries no position')
+    assert.match(got.message, /failed at undefined:undefined/)
+  })
+
+  it('pins a position without pinning a code', () => {
+    assert.equal(check(thrower(err('anything_at_all', 1, 8)), spec, 1), null)
+    assert.ok(check(thrower(err('anything_at_all', 2, 8)), spec, 1),
+      'expected a failure: position pinned, code not')
+  })
+
+  it('does not check a position the row did not pin', () => {
+    // Row 2 pins only the code. Every existing fixture in the fleet is
+    // this shape, so a wrong position here must still PASS — the channel
+    // is opt-in, and adding it must not turn 307 green error rows red.
+    assert.equal(check(thrower(err('bad_b', 99, 99)), spec, 2), null,
+      'an unpinned position must not be checked')
+  })
+
+  it('reads the position through the errorPos hook', () => {
+    // For an error type that carries its position somewhere the default
+    // reader cannot see.
+    const runner = makeRunner({
+      parse: () => { throw new Error('bad_b at 1:8') },
+      errorCode: () => 'bad_b',
+      errorPos: () => ({ row: 1, col: 8 }),
+    })
+    assert.equal(check(runner, spec, 0), null)
+  })
+
+  it('checks the position alongside matchError', () => {
+    // `matchError` replaces the CODE comparison, not the position one: a
+    // suite that has to match its codes by hand should not thereby lose
+    // the ability to pin a position. The hook must also see the code with
+    // the position suffix already stripped.
+    let seen = null
+    const runner = makeRunner({
+      parse: () => { throw err('bad_b', 2, 2) },
+      matchError: (_e, want) => { seen = want; return true },
+    })
+
+    const got = check(runner, spec, 0)
+    assert.ok(got, 'expected a failure: matchError passed, position did not')
+    assert.equal(seen, 'bad_b', 'matchError must see the code without the suffix')
+  })
+})

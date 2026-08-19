@@ -1,9 +1,11 @@
-expected	iserror	code
+expected	iserror	code	row	col
 # Reading an `expected` cell as an error expectation.
 #
 #   expected  the cell, raw.
 #   iserror   JSON boolean: is it an error expectation?
 #   code      JSON string: the code it names ("" means "any code").
+#   row, col  JSON number: the 1-based position it pins, or empty for a
+#             cell that pins none.
 #
 # The cell must be exactly `ERROR`, or start with `ERROR:`. A bare
 # startsWith('ERROR') test would read `ERRORS` as a failure expectation
@@ -21,3 +23,30 @@ error:unexpected	false
 "ERROR"	false
 {"a":1}	false
 []	false
+#
+# POSITION CHANNEL. A code alone does not pin a diagnostic: two runtimes
+# can agree on `unexpected` and disagree on where they say it happened,
+# which is what the fleet audit found in several repos at once with every
+# code row green. `@<row>:<col>` makes that disagreement a failing row.
+#
+# `@` rather than another colon because a code is not always a bare
+# identifier -- the `ERROR:a:b` row above is real, and abnf's fixtures
+# carry whole diagnostic sentences with embedded colons, so `ERROR:x:1:8`
+# could not be split without guessing.
+ERROR:unexpected@1:8	true	"unexpected"	1	8
+ERROR:unexpected@12:345	true	"unexpected"	12	345
+# Position with no code: pin where it failed, not what it was called.
+ERROR:@1:8	true	""	1	8
+# A code containing a colon still keeps it; only the suffix is stripped.
+ERROR:a:b@2:3	true	"a:b"	2	3
+# The suffix is anchored at the END and is digits-only, so a code that
+# merely CONTAINS an @, or an @ not followed by two numbers, is left
+# alone. Without the anchor these become codes nobody can spell.
+ERROR:a@b	true	"a@b"
+ERROR:user@example.com	true	"user@example.com"
+ERROR:x@1	true	"x@1"
+ERROR:x@1:	true	"x@1:"
+ERROR:x@:8	true	"x@:8"
+ERROR:x@1:8y	true	"x@1:8y"
+# A bare ERROR pins nothing at all, position included.
+ERROR	true	""

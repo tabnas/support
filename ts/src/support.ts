@@ -53,9 +53,10 @@ export type { SpecOptions } from './spec'
 
 export {
   ERROR_PREFIX,
-  isErrorExpect, errorCode, parseExpect, equalValue, formatValue,
+  isErrorExpect, errorCode, errorExpect, parseExpect, equalValue,
+  formatValue,
 } from './expect'
-export type { EqualOptions } from './expect'
+export type { EqualOptions, ErrorExpect } from './expect'
 
 // The test-runner half of the barrel: `node:test` enters HERE, and this
 // re-export is the only reason '@tabnas/support' cannot be imported by a

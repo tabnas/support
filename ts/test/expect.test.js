@@ -9,7 +9,8 @@ const Path = require('node:path')
 
 const {
   findSpecDir, loadSpec,
-  isErrorExpect, errorCode, parseExpect, equalValue, formatValue,
+  isErrorExpect, errorCode, errorExpect, parseExpect, equalValue,
+  formatValue,
 } = require('../dist/support.js')
 
 
@@ -32,10 +33,23 @@ describe('expect-error', () => {
       if (wantIsError) {
         assert.equal(errorCode(cell), parseExpect(row.named('code')),
           `${row.where()}: errorCode(${JSON.stringify(cell)})`)
+
+        // The position channel. `row`/`col` are empty for a cell that
+        // pins no position, and parseExpect reads an empty cell as
+        // undefined -- which is exactly what errorExpect returns then, so
+        // the same two assertions cover both kinds of row and neither
+        // kind can go unchecked.
+        const at = errorExpect(cell)
+        assert.equal(at.row, parseExpect(row.named('row')),
+          `${row.where()}: errorExpect(${JSON.stringify(cell)}).row`)
+        assert.equal(at.col, parseExpect(row.named('col')),
+          `${row.where()}: errorExpect(${JSON.stringify(cell)}).col`)
       }
       else {
         assert.throws(() => errorCode(cell), /not an error expectation/,
           `${row.where()}: errorCode(${JSON.stringify(cell)})`)
+        assert.throws(() => errorExpect(cell), /not an error expectation/,
+          `${row.where()}: errorExpect(${JSON.stringify(cell)})`)
       }
     }
   })
