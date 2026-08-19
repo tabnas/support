@@ -108,6 +108,107 @@ describe('register', () => {
     assert.match(err.message, /records no divergence/)
   })
 
+  // --- Review findings on the first cut of this file ---
+
+  it('compares cells by MEANING, not by bytes', () => {
+    // `1` and `1.0` are the same expectation to the runner, so a row whose
+    // columns differ only that way records no divergence. Comparing raw
+    // strings let it sit there passing in both ports forever while
+    // describing a disagreement that does not exist -- the exact failure
+    // this mechanism exists to prevent, one level up.
+    const cases = [
+      ['same number, different notation', '1', '1.0', /records no divergence/],
+      ['same object, different key order',
+        '{"a":1,"b":2}', '{"b":2,"a":1}', /records no divergence/],
+      ['same error code', 'ERROR:bad', 'ERROR:bad', /records no divergence/],
+      ['genuinely different numbers', '1', '2', null],
+      ['value against error', '1', 'ERROR:bad', null],
+    ]
+
+    for (const [name, tsCell, goCell, want] of cases) {
+      const spec = parseSpec('d.tsv', [
+        'input\tts\tgo',
+        `a\t${tsCell}\t${goCell}`,
+      ].join('\n'))
+
+      // A parser answering whatever the TS column records, so only the
+      // divergence check can fail the row.
+      const reg = tsRegister(() => {
+        if (tsCell.startsWith('ERROR')) {
+          throw Object.assign(new Error('bad'), { code: 'bad' })
+        }
+        return JSON.parse(tsCell)
+      })
+
+      const err = checkReg(reg, spec, 0)
+      if (null === want) {
+        assert.equal(err, null, `${name}: expected a pass`)
+      }
+      else {
+        assert.ok(err, `${name}: expected a failure`)
+        assert.match(err.message, want, name)
+      }
+    }
+  })
+
+  it('keeps the row when only SOME runtimes converge', () => {
+    // With three runtimes, agreeing with one does not close the
+    // divergence -- the others still disagree, so deleting the row would
+    // drop live coverage.
+    const spec = parseSpec('d.tsv', [
+      'input\tts\tgo\trust',
+      'a\t"A"\t"a"\t"aa"',
+    ].join('\n'))
+
+    // TypeScript repaired to agree with go. rust still differs from both.
+    const reg = makeRegister({
+      parse: () => 'a',
+      runtime: 'ts',
+      runtimes: ['ts', 'go', 'rust'],
+    })
+
+    const err = checkReg(reg, spec, 0)
+    assert.ok(err, 'expected a failure: ts no longer produces its own cell')
+    assert.match(err.message, /PARTIALLY closed/)
+    assert.match(err.message, /Do NOT delete this row/)
+    assert.doesNotMatch(err.message, /DELETE this row/,
+      'must not tell the reader to delete a row that still records a ' +
+      'live disagreement')
+  })
+
+  it('closes only when ALL runtimes converge', () => {
+    const spec = parseSpec('d.tsv', [
+      'input\tts\tgo\trust',
+      'a\t"A"\t"a"\t"a"',
+    ].join('\n'))
+
+    const reg = makeRegister({
+      parse: () => 'a',
+      runtime: 'ts',
+      runtimes: ['ts', 'go', 'rust'],
+    })
+
+    const err = checkReg(reg, spec, 0)
+    assert.ok(err, 'expected a failure')
+    assert.match(err.message, /CLOSED/)
+  })
+
+  it('parses ONCE per row', () => {
+    // A hook that answers differently on a later call would otherwise
+    // turn a regression into a reported "closed divergence".
+    let calls = 0
+    const reg = tsRegister(() => {
+      calls++
+      return 1 < calls ? 'a' : 'something else'
+    })
+
+    const err = checkReg(reg, fixture(), 0)
+    assert.ok(err, 'expected a failure')
+    assert.equal(calls, 1, 'parse must run once per row')
+    assert.doesNotMatch(err.message, /CLOSED/,
+      'a regression was reported as closed because the parser was re-run')
+  })
+
   it('rejects bad configuration', () => {
     assert.throws(
       () => new DivergenceRegister({ parse: tsPort, runtimes: ['ts', 'go'] }),

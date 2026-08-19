@@ -76,6 +76,60 @@ func (g Register) check() error {
 		g.Runtime, g.Runtimes)
 }
 
+// checkColumns reports a runtime column the file does not have.
+//
+// Row.Named returns "" for an absent column, and in Go an empty expectation
+// means nil — so a parser returning (nil, nil) would make such a row PASS,
+// and a typo in Runtimes would otherwise make every row look like agreement
+// and be blamed on the fixture. TypeScript's Row.resolve throws instead, so
+// without this the two ports disagree about a malformed register.
+func (g Register) checkColumns(row *Row) error {
+	for _, name := range g.Runtimes {
+		if 0 > row.IndexOf(name) {
+			return fmt.Errorf("no column named %q (Register.Runtimes)", name)
+		}
+	}
+	return nil
+}
+
+// rowRunner returns a Runner reading THIS runtime's column, and — when
+// given a row's outcome holder — answering from ONE evaluation however many
+// times it is asked.
+//
+// Every comparison a row needs goes through the ordinary Runner, so the
+// register never develops its own idea of what "equal" means. But the
+// Runner parses as part of comparing, and calling it three times would
+// parse three times: a parse hook that carries state, or a parser whose
+// state changes after an error, could then answer differently on the second
+// call and turn a genuine regression into a reported "closed divergence" —
+// the opposite conclusion.
+func (g Register) rowRunner(once *parseOnce) Runner {
+	r := g.Runner
+	r.Expected = nil
+	r.ExpectedName = g.Runtime
+
+	if nil != once {
+		inner, _ := g.Runner.parser()
+		r.Parse = nil
+		r.ParseRow = func(input string, row *Row) (any, error) {
+			if !once.done {
+				once.value, once.err = inner(input, row)
+				once.done = true
+			}
+			return once.value, once.err
+		}
+	}
+
+	return r
+}
+
+// parseOnce holds one row's parse outcome, replayed for every comparison.
+type parseOnce struct {
+	done  bool
+	value any
+	err   error
+}
+
 // File loads one register file by path and runs it.
 func (g Register) File(t *testing.T, path string) {
 	t.Helper()
@@ -96,20 +150,18 @@ func (g Register) Spec(t *testing.T, spec *File) {
 	t.Helper()
 
 	t.Run("divergence register: "+spec.Name, func(t *testing.T) {
-		if err := g.Runner.CheckSpec(spec); err != nil {
+		// Checked through a runner whose expectation column IS this
+		// runtime's, because that is the column a register reads. Handing
+		// CheckSpec the caller's ordinary Expected/ExpectedName would
+		// reject a perfectly good register whose header is `input ts go`
+		// merely because the Runner it was built from names an "expected"
+		// column that a register never consults.
+		if err := g.rowRunner(nil).CheckSpec(spec); err != nil {
 			t.Fatalf("%v", err)
 		}
 
-		// Every named runtime column must exist. Row.Named returns "" for
-		// a column the file does not have, so a typo in Runtimes would
-		// otherwise make every row look like agreement and be reported as
-		// "this row records no divergence" — a message pointing at the
-		// fixture when the fault is in the caller.
-		for _, name := range g.Runtimes {
-			if 0 > spec.Rows[0].IndexOf(name) {
-				t.Fatalf("%s: no column named %q (Register.Runtimes)",
-					spec.Name, name)
-			}
+		if err := g.checkColumns(spec.Rows[0]); err != nil {
+			t.Fatalf("%s: %v", spec.Name, err)
 		}
 
 		inCol, _ := g.Runner.column(spec, g.Runner.Input, g.Runner.InputName, 0)
@@ -136,6 +188,12 @@ func (g Register) CheckRow(row *Row, input string) error {
 	if err := g.check(); err != nil {
 		return err
 	}
+	// Checked here too, not only in Spec: CheckRow is public, and a caller
+	// driving it directly would otherwise read a missing column as an empty
+	// expectation, which in Go means nil.
+	if err := g.checkColumns(row); err != nil {
+		return fmt.Errorf("%s: %v", row.Where(), err)
+	}
 
 	mine := row.Named(g.Runtime)
 
@@ -148,7 +206,7 @@ func (g Register) CheckRow(row *Row, input string) error {
 		}
 		cell := row.Named(name)
 		others = append(others, other{name, cell})
-		if cell != mine {
+		if !g.sameExpectation(cell, mine) {
 			agree = false
 		}
 	}
@@ -156,43 +214,123 @@ func (g Register) CheckRow(row *Row, input string) error {
 	// 1. Does this row record a divergence at all?
 	if agree {
 		return fmt.Errorf(
-			"%s: every runtime column says %q, so this row records no "+
+			"%s: every runtime column means %q, so this row records no "+
 				"divergence and can never fail meaningfully. Delete it, or "+
 				"correct the cells to what the runtimes actually do.",
 			row.Where(), mine)
 	}
 
+	// ONE parse per row, whatever it ends up being compared against.
+	runner := g.rowRunner(&parseOnce{})
+
 	// 2. Does this runtime still do what the register says?
-	mismatch := g.Runner.CheckRow(row, input, mine)
+	mismatch := runner.CheckRow(row, input, mine)
 	if nil == mismatch {
 		return nil
 	}
 
-	// 3. It does not. Does it now do what one of the OTHERS says? Then the
-	//    divergence is closed, and reporting a regression would point the
-	//    reader at exactly the wrong conclusion.
-	//
-	//    Reusing Runner.CheckRow for this keeps one comparison
-	//    implementation: a register must not develop its own idea of what
-	//    "equal" means.
+	// 3. It does not. Which of the OTHERS does it now agree with?
+	var converged []other
 	for _, o := range others {
-		if nil != g.Runner.CheckRow(row, input, o.cell) {
-			continue
+		if nil == runner.CheckRow(row, input, o.cell) {
+			converged = append(converged, o)
 		}
+	}
+
+	// 4. None. An ordinary regression; the runner's own message says what
+	//    was produced and what was expected.
+	if 0 == len(converged) {
+		return mismatch
+	}
+
+	names := make([]string, 0, len(converged))
+	for _, c := range converged {
+		names = append(names, c.name)
+	}
+
+	// Converged with EVERY other runtime: the divergence is gone.
+	if len(converged) == len(others) {
 		return fmt.Errorf(
 			"%s: this divergence is CLOSED. %s now produces what the %s "+
-				"column records (%q), not its own (%q).\n"+
+				"column(s) record (%q), not its own (%q).\n"+
 				"  This is the register working: a fixed divergence fails as "+
 				"loudly as a regressed one, so the row cannot outlive it.\n"+
 				"  DELETE this row. Do not edit it to match — that would "+
 				"record a divergence that no longer exists, which is what "+
 				"this mechanism exists to prevent.",
-			row.Where(), g.Runtime, o.name, o.cell, mine)
+			row.Where(), g.Runtime, strings.Join(names, ", "),
+			converged[0].cell, mine)
 	}
 
-	// 4. Neither. An ordinary regression; the runner's own message says
-	//    what was produced and what was expected.
-	return mismatch
+	// Converged with SOME. The row still records a live disagreement
+	// between the runtimes that have not converged, so deleting it would
+	// drop that coverage. Only this runtime's own column is stale.
+	var live []string
+	for _, o := range others {
+		found := false
+		for _, c := range converged {
+			if c.name == o.name {
+				found = true
+			}
+		}
+		if !found {
+			live = append(live, o.name)
+		}
+	}
+
+	return fmt.Errorf(
+		"%s: this divergence is PARTIALLY closed. %s now agrees with %s, "+
+			"but not with %s.\n"+
+			"  Do NOT delete this row: it still records a live disagreement "+
+			"between the runtimes that have not converged.\n"+
+			"  UPDATE the %s column to what it now produces, instead of %q.",
+		row.Where(), g.Runtime, strings.Join(names, ", "),
+		strings.Join(live, ", "), g.Runtime, mine)
+}
+
+// sameExpectation reports whether two expectation CELLS mean the same
+// thing.
+//
+// Compared by meaning, not by bytes. `1` and `1.0`, or two objects written
+// with their keys in a different order, are the same expectation to the
+// runner — so a row whose cells differ only that way records no divergence,
+// and comparing raw strings would let it sit there passing in both ports
+// forever while describing a disagreement that does not exist. That is the
+// exact failure this whole mechanism exists to prevent, one level up.
+func (g Register) sameExpectation(a, b string) bool {
+	if a == b {
+		return true
+	}
+
+	if IsErrorExpect(a) || IsErrorExpect(b) {
+		if !IsErrorExpect(a) || !IsErrorExpect(b) {
+			return false
+		}
+		ca, ea := ErrorCode(a)
+		cb, eb := ErrorCode(b)
+		return nil == ea && nil == eb && ca == cb
+	}
+
+	read := func(cell string) (any, error) {
+		if nil != g.Runner.ParseExpected {
+			return g.Runner.ParseExpected(cell, nil)
+		}
+		return ParseExpect(cell)
+	}
+
+	va, erra := read(a)
+	vb, errb := read(b)
+	if nil != erra || nil != errb {
+		// A cell the fixture's own reader cannot parse is a defect the
+		// runner will report with a better message when it runs the row.
+		// Saying "these differ" here defers to that.
+		return false
+	}
+
+	if nil != g.Runner.Normalize {
+		return EqualValueWith(va, vb, g.Runner.Normalize)
+	}
+	return EqualValue(va, vb)
 }
 
 // NoDivergences declares that a repo records no divergences at all.
