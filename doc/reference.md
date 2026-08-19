@@ -246,6 +246,80 @@ This is where a runtime-specific container — an insertion-ordered map, a
 reference wrapper — is unwrapped into the plain value the fixture's JSON
 describes.
 
+
+## The divergence register
+
+Where the two ports of one grammar are known to **disagree**, and the
+difference has been argued rather than repaired (ADR-14).
+
+```js
+makeRegister({ parse, runtime: 'ts', runtimes: ['ts', 'go'] })
+  .file(Path.join(specDir, 'divergent.tsv'))
+```
+
+```go
+support.Register{
+    Runner:   support.Runner{Parse: parse},
+    Runtime:  "go",
+    Runtimes: []string{"ts", "go"},
+}.File(t, filepath.Join(specDir, "divergent.tsv"))
+```
+
+The fixture has an `input` column and **one column per runtime**, each
+written in the ordinary expected vocabulary — a JSON value, or
+`ERROR:<code>`:
+
+```
+input	ts	go
+"\uD800"	"\ud800"	"\ufffd"
+```
+
+Both suites run the same file and read different columns of it.
+
+### Why this is not just a fixture
+
+A fixture fails when behaviour **regresses**. A register also fails when the
+divergence is **fixed**.
+
+When a port is repaired to agree with the other, the register still claims
+they differ, so the suite goes red and names the row to delete:
+
+```
+divergent.tsv:12: this divergence is CLOSED. go now produces what the ts
+column records ("A"), not its own ("a").
+  This is the register working: a fixed divergence fails as loudly as a
+  regressed one, so the row cannot outlive it.
+  DELETE this row. Do not edit it to match — that would record a divergence
+  that no longer exists, which is what this mechanism exists to prevent.
+```
+
+That distinction is the whole point. A regression and a repair produce the
+same red build from a plain fixture, and the message sends the reader to
+the opposite conclusion in one of the two cases.
+
+The 2026-08 fleet audit found **29 recorded divergence claims contradicted
+by execution**, and one file that had been wrong in *both* directions at
+once. Prose does not hold, because nothing runs it. Neither does a
+divergence recorded only as a passing test of current behaviour, because a
+fix leaves it passing while it describes something that no longer happens.
+
+### Rules the register enforces
+
+- **A row must record a disagreement.** If every runtime column says the
+  same thing, the row asserts nothing and would pass forever — the shape of
+  the claims this replaces. It fails.
+- **Runtimes are named, not inferred** from the header, so a `note` or
+  `issue` column is not silently read as a runtime that "agrees" with a
+  sentence. Every named column must exist.
+- **A regression still reports as a mismatch**, not as a closed divergence.
+- **Comparison is the runner's**, unchanged. A register must not develop
+  its own idea of what "equal" means.
+
+`noDivergences(where)` / `NoDivergences(t, where)` declares that a repo has
+none, so the claim appears in the test output rather than being inferred
+from a file nobody notices is missing.
+
+
 ## Runner API
 
 TypeScript builds a runner with `makeRunner(options)` (or

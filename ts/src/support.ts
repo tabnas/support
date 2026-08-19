@@ -63,6 +63,13 @@ export type { EqualOptions } from './expect'
 export { SpecRunner, makeRunner } from './runner'
 export type { RunnerOptions } from './runner'
 
+// The divergence register: recorded TS/Go disagreements, executed by both
+// ports, where a FIXED divergence fails as loudly as a regressed one.
+export {
+  DivergenceRegister, makeRegister, noDivergences,
+} from './register'
+export type { RegisterOptions } from './register'
+
 export { codesInSpecDir, compareCatalogues, coverage } from './census'
 export type {
   CensusOptions, CatalogueDiff, CoverageReport,
