@@ -34,6 +34,24 @@ func TestExpectErrorSpec(t *testing.T) {
 			continue
 		}
 
+		// A cell that IS an error expectation but a malformed one: reading
+		// it must fail rather than yield a position nobody meant.
+		wantBad, err := ParseExpect(row.Named("bad"))
+		if err != nil {
+			t.Fatalf("%s: %v", row.Where(), err)
+		}
+		if true == wantBad {
+			if _, err := ErrorExpect(cell); nil == err {
+				t.Errorf("%s: ErrorExpect(%q) should reject a 0 position",
+					row.Where(), cell)
+			}
+			if _, err := ErrorCode(cell); nil == err {
+				t.Errorf("%s: ErrorCode(%q) should reject a 0 position",
+					row.Where(), cell)
+			}
+			continue
+		}
+
 		code, codeErr := ErrorCode(cell)
 
 		if true == wantIsError {

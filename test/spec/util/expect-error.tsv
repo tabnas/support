@@ -1,4 +1,4 @@
-expected	iserror	code	row	col
+expected	iserror	code	row	col	bad
 # Reading an `expected` cell as an error expectation.
 #
 #   expected  the cell, raw.
@@ -6,6 +6,9 @@ expected	iserror	code	row	col
 #   code      JSON string: the code it names ("" means "any code").
 #   row, col  JSON number: the 1-based position it pins, or empty for a
 #             cell that pins none.
+#   bad       JSON true when the cell IS an error expectation but a
+#             malformed one, so reading it must throw. code/row/col are
+#             then unasserted.
 #
 # The cell must be exactly `ERROR`, or start with `ERROR:`. A bare
 # startsWith('ERROR') test would read `ERRORS` as a failure expectation
@@ -50,3 +53,12 @@ ERROR:x@:8	true	"x@:8"
 ERROR:x@1:8y	true	"x@1:8y"
 # A bare ERROR pins nothing at all, position included.
 ERROR	true	""
+# A position is 1-based, so 0 is not a position. These must be REJECTED,
+# not read. An error type that leaves row/col at their zero value when it
+# has no position would MATCH `@0:0`, and the row would pass while pinning
+# no source location at all -- the exact silent gap this channel exists to
+# close, reintroduced through its own syntax.
+ERROR:unexpected@0:0	true				true
+ERROR:unexpected@0:8	true				true
+ERROR:unexpected@1:0	true				true
+ERROR:@0:0	true				true

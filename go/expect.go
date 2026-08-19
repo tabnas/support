@@ -71,6 +71,10 @@ type ErrorExpectation struct {
 // positionSuffix matches a trailing "@<row>:<col>", anchored at the end
 // and digits-only.
 //
+// Zero is matched here and REJECTED in ErrorExpect rather than excluded by
+// the pattern, so "@0:0" fails as a malformed fixture instead of quietly
+// falling through and being read as part of the code.
+//
 // "@" rather than another colon because a code is not always a bare
 // identifier: the fleet's fixtures already carry "ERROR:a:b" and whole
 // diagnostic sentences with embedded colons, so "ERROR:x:1:8" could not be
@@ -124,6 +128,17 @@ func ErrorExpect(expected string) (ErrorExpectation, error) {
 	if nil != err {
 		return ErrorExpectation{}, fmt.Errorf(
 			"invalid column in error expectation %q: %w", expected, err)
+	}
+
+	// Positions are 1-based, so zero is not a position. It matters more
+	// than it looks: an error type that leaves Row/Col at their zero value
+	// when it has no position would MATCH "@0:0", and the row would pass
+	// while pinning no source location at all — the exact silent gap this
+	// channel exists to close, reintroduced through its own syntax.
+	if row < 1 || col < 1 {
+		return ErrorExpectation{}, fmt.Errorf(
+			"position in an error expectation is 1-based, so 0 is not a "+
+				"position: %q", expected)
 	}
 
 	return ErrorExpectation{

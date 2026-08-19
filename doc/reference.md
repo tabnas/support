@@ -108,6 +108,12 @@ sentences with embedded colons, so `ERROR:x:1:8` could not be split
 without guessing. The suffix is anchored at the end and digits-only, so a
 code that merely contains an `@` (`ERROR:user@example.com`) keeps it.
 
+Positions are **1-based**, and `@0:0` is rejected as a malformed fixture
+rather than read. An error type that leaves its `row`/`col` at zero when it
+has no position would otherwise *match* `@0:0`, and the row would pass
+while pinning no source location at all — this channel's own silent gap,
+reintroduced through its own syntax.
+
 An error that reports **no** position fails a row that pins one. The point
 of the channel is that "it failed somewhere" does not satisfy "it must
 fail here".

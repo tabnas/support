@@ -30,6 +30,16 @@ describe('expect-error', () => {
       assert.equal(isErrorExpect(cell), wantIsError,
         `${row.where()}: isErrorExpect(${JSON.stringify(cell)})`)
 
+      // A cell that IS an error expectation but a malformed one: reading
+      // it must throw rather than yield a position nobody meant.
+      if (parseExpect(row.named('bad'))) {
+        assert.throws(() => errorExpect(cell), /is 1-based/,
+          `${row.where()}: errorExpect(${JSON.stringify(cell)})`)
+        assert.throws(() => errorCode(cell), /is 1-based/,
+          `${row.where()}: errorCode(${JSON.stringify(cell)})`)
+        continue
+      }
+
       if (wantIsError) {
         assert.equal(errorCode(cell), parseExpect(row.named('code')),
           `${row.where()}: errorCode(${JSON.stringify(cell)})`)

@@ -53,6 +53,10 @@ export type ErrorExpect = {
 
 // Trailing `@<row>:<col>`, anchored at the end and digits-only.
 //
+// Zero is matched here and REJECTED below rather than excluded by the
+// pattern, so `@0:0` fails as a malformed fixture instead of quietly
+// falling through and being read as part of the code.
+//
 // `@` rather than another colon because a code is not always a bare
 // identifier: the fleet's fixtures already carry `ERROR:a:b` and whole
 // diagnostic sentences with embedded colons, so `ERROR:x:1:8` could not be
@@ -89,11 +93,21 @@ export function errorExpect(expected: string): ErrorExpect {
     return { code }
   }
 
-  return {
-    code: code.slice(0, pos.index),
-    row: parseInt(pos[1], 10),
-    col: parseInt(pos[2], 10),
+  const row = parseInt(pos[1], 10)
+  const col = parseInt(pos[2], 10)
+
+  // Positions are 1-based, so zero is not a position. It matters more than
+  // it looks: an error type that leaves `row`/`col` at their zero value
+  // when it has no position would MATCH `@0:0`, and the row would pass
+  // while pinning no source location at all — the exact silent gap this
+  // channel exists to close, reintroduced through its own syntax.
+  if (row < 1 || col < 1) {
+    throw new Error(
+      'position in an error expectation is 1-based, so 0 is not a ' +
+      'position: ' + JSON.stringify(expected))
   }
+
+  return { code: code.slice(0, pos.index), row, col }
 }
 
 
