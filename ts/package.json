@@ -36,7 +36,10 @@
   ],
   "exports": {
     ".": "./dist/support.js",
-    "./adder": "./dist/adder.js"
+    "./adder": "./dist/adder.js",
+    "./escape": "./dist/escape.js",
+    "./expect": "./dist/expect.js",
+    "./spec": "./dist/spec.js"
   },
   "devDependencies": {
     "@tabnas/parser": "*",
