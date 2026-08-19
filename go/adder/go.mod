@@ -16,7 +16,7 @@ go 1.24.7
 // here, and a placeholder would fail before anything compiled. Bump it
 // with the support module's version at every release (`make publish-go`).
 require (
-	github.com/tabnas/parser/go v0.8.0
+	github.com/tabnas/parser/go v0.8.10
 	github.com/tabnas/support/go v0.3.1
 )
 
