@@ -160,9 +160,17 @@ describe('expect-equal', () => {
     // distinguishable, a signed-zero mismatch would otherwise report
     // "got 0, expected 0" — a failure message that reads as a bug in the
     // runner rather than a real difference.
+    // At EVERY depth, and matching what Go's json.Marshal already
+    // writes -- otherwise the two runtimes disagree about their own
+    // diagnostics for the very rows ADR-15 added.
     assert.equal(formatValue(-0), '-0')
     assert.equal(formatValue(0), '0')
-    assert.equal(formatValue([-0]), '[0]')
+    assert.equal(formatValue([-0]), '[-0]')
+    assert.equal(formatValue([0]), '[0]')
+    assert.equal(formatValue({ a: -0 }), '{"a":-0}')
+    assert.equal(formatValue({ a: [1, { b: -0 }] }), '{"a":[1,{"b":-0}]}')
+    // A value with no -0 in it is formatted exactly as before.
+    assert.equal(formatValue({ a: [1, { b: 0 }] }), '{"a":[1,{"b":0}]}')
 
     // A value JSON cannot render still has to produce something readable:
     // this runs inside a failure message, where throwing again would

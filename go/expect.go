@@ -325,6 +325,28 @@ func asFloat(v any) (float64, bool) {
 		f, err := n.Float64()
 		return f, nil == err
 	}
+
+	// A defined numeric type — `type Number float64` in a grammar's own
+	// package — is none of the cases above, because a type switch matches
+	// exact types. Without this it fell through to reflect.DeepEqual, where
+	// Number(1) did not even equal 1.0, so EVERY numeric row failed for such
+	// a grammar; and Number(-0) compared equal to Number(0), so ADR-15's
+	// signed-zero contract was not enforced for it at all.
+	//
+	// Kinds, not types, is the same choice the map comparison below already
+	// makes for a defined string key type.
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Float32, reflect.Float64:
+		return rv.Float(), true
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32,
+		reflect.Int64:
+		return float64(rv.Int()), true
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32,
+		reflect.Uint64:
+		return float64(rv.Uint()), true
+	}
+
 	return 0, false
 }
 
@@ -335,13 +357,9 @@ func FormatValue(val any) string {
 	if nil == val {
 		return "nil"
 	}
-	// json.Marshal renders -0 as "0", so a signed-zero mismatch would report
-	// "got 0, expected 0" — a failure message that reads as a bug in the
-	// runner. Since ADR-15 made the two distinguishable, the formatter has
-	// to be able to spell the difference.
-	if n, ok := asFloat(val); ok && 0 == n && math.Signbit(n) {
-		return "-0"
-	}
+	// json.Marshal already renders -0 as "-0" (unlike JavaScript's
+	// JSON.stringify, which renders it "0"), so nothing extra is needed
+	// here for ADR-15's signed zero. ts/src/expect.ts has to do the work.
 	if b, err := json.Marshal(val); nil == err {
 		return string(b)
 	}

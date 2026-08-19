@@ -171,18 +171,81 @@ export function formatValue(val: unknown): string {
   if (undefined === val) {
     return 'undefined'
   }
-  // JSON.stringify renders -0 as "0", so a signed-zero mismatch would
-  // report "got 0, expected 0" — a failure message that reads as a bug in
-  // the runner. Since ADR-15 made the two distinguishable, the formatter
-  // has to be able to spell the difference.
-  if (Object.is(val, -0)) {
-    return '-0'
-  }
   try {
+    // JSON.stringify renders -0 as "0" at EVERY depth, so a signed-zero
+    // mismatch would report "got [0], expected [0]" — a failure message
+    // that reads as a bug in the runner. Since ADR-15 made the two
+    // distinguishable, the formatter has to be able to spell the
+    // difference. Go's json.Marshal already writes "-0", so without this
+    // the two runtimes would also disagree about their own diagnostics.
+    //
+    // The custom path is taken ONLY when a -0 is actually present, so
+    // every other failure message stays byte-identical to what
+    // JSON.stringify produced before.
+    if (hasNegativeZero(val, new Set())) {
+      return signedJson(val, new Set())
+    }
     const out = JSON.stringify(val)
     return undefined === out ? String(val) : out
   }
   catch {
     return String(val)
+  }
+}
+
+
+// Does a value contain -0 anywhere? Cycle-safe: a cycle cannot contain a
+// number this has not already seen, so returning false on one is exact,
+// not a give-up.
+function hasNegativeZero(val: unknown, seen: Set<object>): boolean {
+  if (Object.is(val, -0)) {
+    return true
+  }
+  if (null === val || 'object' !== typeof val) {
+    return false
+  }
+  if (seen.has(val)) {
+    return false
+  }
+  seen.add(val)
+  const vals = Array.isArray(val) ? val : Object.values(val)
+  return vals.some((v) => hasNegativeZero(v, seen))
+}
+
+
+// JSON, except that -0 is written `-0` rather than `0`.
+//
+// Deliberately narrow: it handles what a parse result is made of, and
+// anything else falls back to JSON.stringify for that subtree, so the one
+// difference from JSON is the one it exists for. A cycle throws, which
+// formatValue catches exactly as it catches JSON.stringify's own throw.
+function signedJson(val: unknown, seen: Set<object>): string {
+  if (Object.is(val, -0)) {
+    return '-0'
+  }
+  if (null === val || 'object' !== typeof val) {
+    return JSON.stringify(val) ?? String(val)
+  }
+  if (seen.has(val)) {
+    throw new TypeError('cyclic value')
+  }
+  if (!hasNegativeZero(val, new Set())) {
+    // No -0 below here, so JSON.stringify is already right, and using it
+    // keeps toJSON, Date and every other JSON behaviour intact.
+    return JSON.stringify(val) ?? String(val)
+  }
+
+  seen.add(val)
+  try {
+    if (Array.isArray(val)) {
+      return '[' + val.map((v) => signedJson(v, seen)).join(',') + ']'
+    }
+    return '{' + Object.entries(val)
+      .filter(([, v]) => undefined !== v && 'function' !== typeof v)
+      .map(([k, v]) => JSON.stringify(k) + ':' + signedJson(v, seen))
+      .join(',') + '}'
+  }
+  finally {
+    seen.delete(val)
   }
 }

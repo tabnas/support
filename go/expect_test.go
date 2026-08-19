@@ -336,12 +336,14 @@ func TestFormatValue(t *testing.T) {
 		{"text", `"text"`},
 		{1.5, "1.5"},
 
-		// json.Marshal renders -0 as "0". Since ADR-15 made the two
-		// distinguishable, a signed-zero mismatch would otherwise report
-		// "got 0, expected 0" — a failure message that reads as a bug in
-		// the runner rather than a real difference.
+		// Signed zero, at every depth. json.Marshal already writes "-0"
+		// here — unlike JavaScript's JSON.stringify, which writes "0" —
+		// so these rows exist to pin that the two runtimes agree about
+		// their own diagnostics for the rows ADR-15 added.
 		{math.Copysign(0, -1), "-0"},
 		{0.0, "0"},
+		{[]any{math.Copysign(0, -1)}, "[-0]"},
+		{map[string]any{"a": math.Copysign(0, -1)}, `{"a":-0}`},
 
 		// json.Marshal refuses NaN; a failure message still has to say
 		// something, since throwing here would replace the real failure
@@ -352,6 +354,52 @@ func TestFormatValue(t *testing.T) {
 	for _, c := range cases {
 		if got := FormatValue(c.val); got != c.want {
 			t.Errorf("FormatValue(%#v) = %q, want %q", c.val, got, c.want)
+		}
+	}
+}
+
+// A grammar's own numeric type is still a number.
+//
+// asFloat is a type switch, and a type switch matches EXACT types, so
+// `type Number float64` in a grammar's package matched none of its cases
+// and fell through to reflect.DeepEqual. Two things went wrong there, and
+// only one of them was about signed zero:
+//
+//   - Number(1) did not equal 1.0, so EVERY numeric row failed for such a
+//     grammar. The expected side always arrives from encoding/json as
+//     float64, so the two sides could never meet.
+//   - Number(-0) equalled Number(0), because DeepEqual compares float64
+//     with ==, so ADR-15's signed-zero contract was not enforced there at
+//     all — the bitwise comparison above was never reached.
+//
+// ts/src/expect.ts needs no counterpart: JavaScript has one number type.
+func TestEqualValueDefinedNumericType(t *testing.T) {
+	type Number float64
+	type Count int
+
+	nz := math.Copysign(0, -1)
+
+	cases := []struct {
+		name      string
+		got, want any
+		equal     bool
+	}{
+		{"defined float meets json float64", Number(1), 1.0, true},
+		{"either side", 1.0, Number(1), true},
+		{"magnitude still decides", Number(1), 2.0, false},
+		{"defined int meets json float64", Count(3), 3.0, true},
+
+		// The contract this test exists for.
+		{"signed zero, both defined", Number(nz), Number(0), false},
+		{"signed zero, one defined", Number(nz), 0.0, false},
+		{"signed zero, agreeing", Number(nz), math.Copysign(0, -1), true},
+		{"plain zero, agreeing", Number(0), 0.0, true},
+	}
+
+	for _, c := range cases {
+		if got := EqualValue(c.got, c.want); got != c.equal {
+			t.Errorf("%s: EqualValue(%#v, %#v) = %v, want %v",
+				c.name, c.got, c.want, got, c.equal)
 		}
 	}
 }
