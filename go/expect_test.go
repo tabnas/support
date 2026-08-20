@@ -403,3 +403,97 @@ func TestEqualValueDefinedNumericType(t *testing.T) {
 		}
 	}
 }
+
+// Audit item S2. A lone surrogate escape in a SHARED expected cell is
+// decoded differently by the two runtimes - U+FFFD here, preserved in
+// TypeScript - so the cell asks them different questions and both pass.
+// The runner refuses such a cell; this pins the detector it uses, and
+// ts/test/expect.test.js runs the same rows.
+//
+// `cell` is the RAW cell text: Named does not escape-decode, which is
+// what makes the two `\\ud800` rows meaningful. Those are an escaped
+// backslash followed by the letters `ud800`, not an escape at all, and
+// they are what a detector that merely searched for the text would get
+// wrong.
+func TestLoneSurrogateSpec(t *testing.T) {
+	spec := mustLoad(t, filepath.Join(specDir(t), "util", "lone-surrogate.tsv"))
+	if 0 == len(spec.Rows) {
+		t.Fatal("no cases")
+	}
+	for _, row := range spec.Rows {
+		cell := row.Named("cell")
+		wantAny, err := ParseExpect(row.Named("at"))
+		if nil != err {
+			t.Fatalf("%s: bad at: %v", row.Where(), err)
+		}
+		want, ok := wantAny.(float64)
+		if !ok {
+			t.Fatalf("%s: at is not a number: %#v", row.Where(), wantAny)
+		}
+		if got := LoneSurrogateAt(cell); got != int(want) {
+			t.Errorf("%s: LoneSurrogateAt(%q) = %d, want %d",
+				row.Where(), cell, got, int(want))
+		}
+	}
+}
+
+// The detector is only half of it: what matters is that a fixture row
+// carrying one FAILS rather than passing in both runtimes.
+func TestRunnerRefusesLoneSurrogateCell(t *testing.T) {
+	spec, err := ParseSpec("inline.tsv", "input\texpected\nx\t\"A\"", nil)
+	if nil != err {
+		t.Fatal(err)
+	}
+	row := spec.Rows[0]
+
+	r := Runner{Parse: func(string) (any, error) { return "x", nil }}
+	rerr := r.CheckRow(row, "x", `"\ud800"`)
+	if nil == rerr {
+		t.Fatal("a lone surrogate cell was accepted")
+	}
+	if !strings.Contains(rerr.Error(), "unpaired surrogate escape at code point 1") {
+		t.Errorf("wrong message: %v", rerr)
+	}
+
+	// A PAIR is fine - both runtimes decode it to the same character, so
+	// the shared column expresses it perfectly well. Without this the
+	// refusal is also satisfied by rejecting every `\u` escape.
+	pair := Runner{Parse: func(string) (any, error) {
+		return "\U0001F600", nil
+	}}
+	if perr := pair.CheckRow(row, "x", `"\ud83d\ude00"`); nil != perr {
+		t.Errorf("a surrogate PAIR was refused: %v", perr)
+	}
+}
+
+// ParseExpected exists because a fixture's vocabulary can be wider than
+// JSON, and a wider vocabulary need not read \uXXXX as an escape at all.
+// A hook treating the cell as opaque text is asking a question both
+// runtimes answer identically, so refusing it would be the guard
+// inventing a problem. Raised in review.
+//
+// A hook whose syntax DOES use JSON escapes should call LoneSurrogateAt
+// itself - which is why it is exported, and why this asserts the hook
+// still SEES the raw cell.
+func TestCustomParseExpectedKeepsItsOwnVocabulary(t *testing.T) {
+	spec, err := ParseSpec("inline.tsv", "input\texpected\nx\t\"A\"", nil)
+	if nil != err {
+		t.Fatal(err)
+	}
+	row := spec.Rows[0]
+
+	seen := ""
+	r := Runner{
+		Parse: func(string) (any, error) { return `RAW:\ud800`, nil },
+		ParseExpected: func(cell string, _ *Row) (any, error) {
+			seen = cell
+			return cell, nil
+		},
+	}
+	if rerr := r.CheckRow(row, "x", `RAW:\ud800`); nil != rerr {
+		t.Fatalf("a custom hook's cell was refused: %v", rerr)
+	}
+	if seen != `RAW:\ud800` {
+		t.Errorf("hook saw %q, want the raw cell", seen)
+	}
+}

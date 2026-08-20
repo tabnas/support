@@ -58,6 +58,9 @@ Both runtimes expose the same four things:
   float of the same magnitude).
 - **The runner.** Fixture rows in, `node:test` / `*testing.T` subtests
   out, with the file and line in every failure message.
+- **The divergence register.** Recorded TS/Go disagreements, executed by
+  both ports, where a *fixed* divergence fails as loudly as a regressed one
+  — so a row cannot outlive the difference it records.
 
 ## Depending on it without shipping it
 

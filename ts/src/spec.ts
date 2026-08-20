@@ -223,11 +223,27 @@ export function loadSpecDir(dir: string, options?: SpecOptions): SpecFile[] {
     throw new Error('spec directory not found: ' + dir)
   }
 
+  // Files only, judged by what the name RESOLVES to. A DIRECTORY named
+  // `foo.tsv` would otherwise be handed to readFileSync and abort the
+  // run. `Dirent.isFile()` answers about the link rather than its
+  // target, so a symlinked fixture was dropped here and loaded by Go —
+  // measured on a spec dir holding `plain.tsv` and a symlinked
+  // `linked.tsv`: Go ran both, this ran only `plain.tsv`. A row that
+  // runs in one runtime and not the other is the exact failure this
+  // package exists to prevent, and it is the mirror of the
+  // `.tsv`-named-directory hazard the comment above already guarded.
+  //
+  // statSync follows the link, and `isFile()` on the result is false
+  // for a directory, so one test answers both halves.
   const names = readdirSync(dir, { withFileTypes: true })
-    // Files only. A DIRECTORY named `foo.tsv` would otherwise be handed
-    // to readFileSync and abort the run — and the Go loader skips it, so
-    // the same fixture tree would work there and not here.
-    .filter((e) => e.isFile() && e.name.endsWith('.tsv'))
+    .filter((e) => e.name.endsWith('.tsv'))
+    .filter((e) => {
+      // A dangling symlink names a fixture that is not there. Skipping
+      // it silently is the same silent-pass this loader refuses
+      // everywhere else.
+      const st = statSync(join(dir, e.name))
+      return st.isFile()
+    })
     .map((e) => e.name)
     .sort()
 
