@@ -37,10 +37,16 @@ const SPEC = findSpecDir(__dirname)
 
 describe('census', () => {
 
-  // `util/` and `census/` are both named-file families: each fixture has
-  // its own column shape, so each suite names the files it runs, and the
-  // tripwire below is what notices one wired into a single runtime.
-  for (const family of ['census', 'util']) {
+  // `util/`, `census/` and `register/` are all named-file families: each
+  // fixture has its own column shape, so each suite names the files it
+  // runs, and the tripwire below is what notices one wired into a single
+  // runtime.
+  //
+  // `register` was added to this list in the same change that created the
+  // directory. A new family that is not listed here is invisible to the
+  // tripwire, so the safeguard would pass while a fixture ran in one port
+  // only -- which is the safeguard's whole subject.
+  for (const family of ['census', 'register', 'util']) {
     it(`names every ${family} fixture in this runtime`, () => {
       const familyDir = Path.join(SPEC, family)
       const fixtures = Fs.readdirSync(familyDir)
