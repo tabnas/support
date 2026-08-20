@@ -202,9 +202,23 @@ export type EqualOptions = {
 
 
 // Compare two values with JSON semantics: structural, key-order
-// independent, `-0` equal to `0`, and `NaN` equal to itself (which `===`
-// is not, and which a fixture cannot express in JSON but an in-language
-// case can).
+// independent, `NaN` equal to itself (which `===` is not, and which a
+// fixture cannot express in JSON but an in-language case can), and `-0`
+// NOT equal to `0`.
+//
+// Those last two are the two halves of ADR-15, and they go opposite ways
+// on purpose.
+//
+// Map key order is OUT of the parsed-value contract. TypeScript cannot
+// preserve integer-like key order in a plain object — that is ECMAScript's
+// own property-ordering rule, not a porting choice — so making order
+// contractual would force this port to return an order-preserving
+// container, a breaking change for every consumer, to pin a property no
+// format in the fleet defines as significant.
+//
+// Signed zero is IN it. `-0` is representable and distinguishable in both
+// runtimes, and a parser that reports `0` for the input `-0` has lost
+// information the source carried.
 export function equalValue(
   got: unknown, expected: unknown, options?: EqualOptions,
 ): boolean {
@@ -221,12 +235,17 @@ function deepEqual(
     b = norm(b)
   }
 
-  if (a === b) {
-    return true // Covers primitives, and 0 === -0.
+  // Numbers first, BEFORE the `===` shortcut, because `0 === -0` is true
+  // and signed zero is part of the value contract (ADR-15): a parser that
+  // reports `0` for the input `-0` has lost information the source carried.
+  // `Object.is` separates them, and treats NaN as equal to itself, which is
+  // the other place `===` gives the wrong answer for a fixture.
+  if ('number' === typeof a || 'number' === typeof b) {
+    return 'number' === typeof a && 'number' === typeof b && Object.is(a, b)
   }
 
-  if ('number' === typeof a && 'number' === typeof b) {
-    return Number.isNaN(a) && Number.isNaN(b)
+  if (a === b) {
+    return true // Covers the remaining primitives.
   }
 
   if (null == a || null == b) {
@@ -283,10 +302,80 @@ export function formatValue(val: unknown): string {
     return 'undefined'
   }
   try {
+    // JSON.stringify renders -0 as "0" at EVERY depth, so a signed-zero
+    // mismatch would report "got [0], expected [0]" — a failure message
+    // that reads as a bug in the runner. Since ADR-15 made the two
+    // distinguishable, the formatter has to be able to spell the
+    // difference. Go's json.Marshal already writes "-0", so without this
+    // the two runtimes would also disagree about their own diagnostics.
+    //
+    // The custom path is taken ONLY when a -0 is actually present, so
+    // every other failure message stays byte-identical to what
+    // JSON.stringify produced before.
+    if (hasNegativeZero(val, new Set())) {
+      return signedJson(val, new Set())
+    }
     const out = JSON.stringify(val)
     return undefined === out ? String(val) : out
   }
   catch {
     return String(val)
+  }
+}
+
+
+// Does a value contain -0 anywhere? Cycle-safe: a cycle cannot contain a
+// number this has not already seen, so returning false on one is exact,
+// not a give-up.
+function hasNegativeZero(val: unknown, seen: Set<object>): boolean {
+  if (Object.is(val, -0)) {
+    return true
+  }
+  if (null === val || 'object' !== typeof val) {
+    return false
+  }
+  if (seen.has(val)) {
+    return false
+  }
+  seen.add(val)
+  const vals = Array.isArray(val) ? val : Object.values(val)
+  return vals.some((v) => hasNegativeZero(v, seen))
+}
+
+
+// JSON, except that -0 is written `-0` rather than `0`.
+//
+// Deliberately narrow: it handles what a parse result is made of, and
+// anything else falls back to JSON.stringify for that subtree, so the one
+// difference from JSON is the one it exists for. A cycle throws, which
+// formatValue catches exactly as it catches JSON.stringify's own throw.
+function signedJson(val: unknown, seen: Set<object>): string {
+  if (Object.is(val, -0)) {
+    return '-0'
+  }
+  if (null === val || 'object' !== typeof val) {
+    return JSON.stringify(val) ?? String(val)
+  }
+  if (seen.has(val)) {
+    throw new TypeError('cyclic value')
+  }
+  if (!hasNegativeZero(val, new Set())) {
+    // No -0 below here, so JSON.stringify is already right, and using it
+    // keeps toJSON, Date and every other JSON behaviour intact.
+    return JSON.stringify(val) ?? String(val)
+  }
+
+  seen.add(val)
+  try {
+    if (Array.isArray(val)) {
+      return '[' + val.map((v) => signedJson(v, seen)).join(',') + ']'
+    }
+    return '{' + Object.entries(val)
+      .filter(([, v]) => undefined !== v && 'function' !== typeof v)
+      .map(([k, v]) => JSON.stringify(k) + ':' + signedJson(v, seen))
+      .join(',') + '}'
+  }
+  finally {
+    seen.delete(val)
   }
 }

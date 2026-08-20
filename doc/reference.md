@@ -266,9 +266,29 @@ encoding, so it cannot appear literally in one.
 
 `equalValue` compares with **JSON semantics**, not the host language's:
 
-- Structural, and key-order independent.
-- `-0` equals `0`. The `expected` column is written with JavaScript
-  `JSON.stringify` semantics, which renders `-0` as `0`.
+- Structural, and key-order independent. **Map key order is not part of
+  the parsed-value contract** (ADR-15). TypeScript cannot preserve
+  integer-like key order in a plain object — that is ECMAScript's own
+  property-ordering rule, not a porting choice — so a fixture must not
+  depend on it, and a difference in it between two ports is a recorded
+  difference rather than a defect.
+- `-0` does **not** equal `0` (ADR-15). Signed zero is representable and
+  distinguishable in both runtimes, and a parser that reports `0` for the
+  input `-0` has lost information the source carried, so `-0` is pinnable
+  in a fixture. Numbers compare by IEEE bits; every other finite double
+  has a unique bit pattern, so for those this is exactly `===` / `==`.
+  `formatValue` spells `-0` as `-0` **at every depth**, because
+  `JSON.stringify` renders it `0` and a nested mismatch would otherwise
+  report "got [0], expected [0]". Go's `json.Marshal` already writes `-0`,
+  so only the TypeScript formatter needed the work — and without it the two
+  runtimes would disagree about their own diagnostics.
+- **Go only:** a *defined* numeric type (`type Number float64` in a
+  grammar's own package) is compared as the number it is, by kind rather
+  than by exact type. Without that it fell through to `reflect.DeepEqual`,
+  where `Number(1)` did not equal `1.0` — so every numeric row failed for
+  such a grammar — and `Number(-0)` equalled `Number(0)`, so the signed-zero
+  contract was not enforced for it. Same choice the map comparison makes for
+  a defined string key type.
 - `NaN` equals itself, which `===` and `==` do not. A fixture cannot
   express `NaN` — JSON has none — but a grammar can produce one.
 - **Go only:** an integer equals the float of the same magnitude, and any
