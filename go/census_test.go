@@ -39,6 +39,14 @@ func TestCensusNamesEveryCensusFixture(t *testing.T) {
 	censusNamesEveryFixture(t, "census")
 }
 
+// Added in the same change that created test/spec/register. A new family
+// that is not listed here is invisible to the tripwire, so the safeguard
+// would pass while a fixture ran in one port only — which is the
+// safeguard's whole subject.
+func TestCensusNamesEveryRegisterFixture(t *testing.T) {
+	censusNamesEveryFixture(t, "register")
+}
+
 // censusNamesEveryFixture is the tripwire itself, shared by the
 // named-file families: every *.tsv in the family's directory must be
 // named somewhere in this runtime's test sources.

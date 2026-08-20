@@ -264,3 +264,47 @@ describe('spec-dir-find', () => {
     assert.throws(() => findSpecDir(Os.tmpdir()), /no test.spec directory/)
   })
 })
+
+
+describe('loadSpecDir and symlinks', () => {
+  // A symlinked fixture must load, because the Go loader loads it.
+  //
+  // `Dirent.isFile()` answers about the LINK, not its target, so this
+  // dropped a symlinked `.tsv` that `go/spec.go` ran. Measured on a
+  // spec dir holding `plain.tsv` and a symlinked `linked.tsv`: Go saw
+  // both, this saw only `plain.tsv`. A row that runs in one runtime and
+  // not the other is the exact failure this package exists to prevent —
+  // and the mirror of the `.tsv`-named-directory hazard already guarded
+  // in loadSpecDir, which is still guarded below.
+  //
+  // `go/spec_test.go` asserts the same two things against the same tree.
+  it('loads a symlinked fixture, and still skips a .tsv directory', () => {
+    const dir = Fs.mkdtempSync(Path.join(Os.tmpdir(), 'tabnas-symlink-'))
+    Fs.mkdirSync(Path.join(dir, 'sub'))
+    Fs.writeFileSync(Path.join(dir, 'plain.tsv'), 'in\tout\na\t1\n')
+    Fs.writeFileSync(Path.join(dir, 'sub', 'target.tsv'), 'in\tout\nb\t2\n')
+
+    // Creating a symlink needs a privilege or developer mode on Windows.
+    // Where it is refused there is nothing to assert, so say so and stop
+    // rather than fail for a reason that is not the loader's.
+    try {
+      Fs.symlinkSync(Path.join('sub', 'target.tsv'),
+        Path.join(dir, 'linked.tsv'))
+    } catch (e) {
+      if ('EPERM' === e.code || 'EACCES' === e.code) {
+        return
+      }
+      throw e
+    }
+
+    // A DIRECTORY named `*.tsv` is not a fixture and must stay skipped:
+    // readFileSync on it would abort the run. A SYMLINK to a directory
+    // is the same hazard by another route, and is the half `go/spec.go`
+    // got wrong — kept here so both loaders assert the same tree.
+    Fs.mkdirSync(Path.join(dir, 'trap.tsv'))
+    Fs.symlinkSync('sub', Path.join(dir, 'linktrap.tsv'))
+
+    const files = loadSpecDir(dir).map((f) => f.file).sort()
+    assert.deepStrictEqual(files, ['linked.tsv', 'plain.tsv'])
+  })
+})

@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // expect.go — reading the expected column, and comparing a parse result
@@ -147,6 +148,137 @@ func ErrorExpect(expected string) (ErrorExpectation, error) {
 		Col:    col,
 		HasPos: true,
 	}, nil
+}
+
+// LoneSurrogateAt returns the position of the first UNPAIRED \uXXXX
+// surrogate escape in an expected cell, counted in CODE POINTS, or -1.
+//
+// Code points because this number crosses the two runtimes. The natural
+// index here is a BYTE offset and in ts/src/expect.ts it is a UTF-16
+// offset, and those disagree the moment anything non-ASCII precedes the
+// escape: for `"é\ud800"` they are 3 and 2. A helper whose whole purpose
+// is to keep the two ports saying the same thing cannot report a number
+// that depends on which port asked. A code-point count is the same in
+// both by definition, and it is also what someone counting characters in
+// a TSV cell would arrive at.
+//
+// WHY THIS IS NOT A CURIOSITY. The two runtimes decode such an escape
+// differently, and neither is wrong: JavaScript's JSON.parse preserves
+// it, because a JS string is UTF-16 and may hold one; this port's
+// encoding/json replaces it with U+FFFD, because a Go string is UTF-8
+// and cannot. That is parser/DIVERGENCE.md's first entry, deliberate and
+// permanent.
+//
+// Measured on the same cells:
+//
+//	cell             TypeScript            Go
+//	"\ud800"         1 unit, d800          3 bytes, ef bf bd
+//	"a\ud800b"       61 d800 62            61 ef bf bd 62
+//	"\ud83d\ude00"  d83d de00             f0 9f 98 80   (a PAIR - agree)
+//
+// So a SHARED expected cell holding one asks the two runtimes different
+// questions and reports agreement either way. It is the one thing a
+// shared fixture cannot express, and it fails silently, which is why the
+// runner refuses it rather than leaving it to be noticed. Audit item S2.
+//
+// A PER-RUNTIME column is a different matter: there each runtime reads
+// its own cell, so writing the two decodings out explicitly is exactly
+// how a divergence register records this one. That path does not go
+// through this check.
+//
+// Only the ESCAPE form is detected, because it is the only one that can
+// occur: a fixture file is UTF-8, and a lone surrogate has no UTF-8
+// encoding, so it cannot appear literally in one.
+func LoneSurrogateAt(cell string) int {
+	hex4 := func(at int) int {
+		if at+4 > len(cell) {
+			return -1
+		}
+		v := 0
+		for _, c := range []byte(cell[at : at+4]) {
+			v <<= 4
+			switch {
+			case '0' <= c && c <= '9':
+				v |= int(c - '0')
+			case 'a' <= c && c <= 'f':
+				v |= int(c-'a') + 10
+			case 'A' <= c && c <= 'F':
+				v |= int(c-'A') + 10
+			default:
+				return -1
+			}
+		}
+		return v
+	}
+
+	for i := 0; i < len(cell); {
+		if '\\' != cell[i] {
+			i++
+			continue
+		}
+
+		// A run of backslashes escapes itself in pairs; only an ODD run
+		// leaves a live escape, whose introducer is the byte after the
+		// whole run. `\\ud800` is a literal backslash then `ud800`.
+		j := i
+		for j < len(cell) && '\\' == cell[j] {
+			j++
+		}
+		if 0 == (j-i)%2 {
+			i = j
+			continue
+		}
+
+		start := j - 1
+		if j >= len(cell) || 'u' != cell[j] {
+			i = j + 1
+			continue
+		}
+
+		cp := hex4(j + 1)
+		if cp < 0 {
+			i = j + 1
+			continue
+		}
+
+		if 0xd800 <= cp && cp <= 0xdbff {
+			// A high surrogate is fine if a low follows IMMEDIATELY.
+			k := j + 5
+			if k+1 < len(cell) && '\\' == cell[k] && 'u' == cell[k+1] {
+				if lo := hex4(k + 2); 0xdc00 <= lo && lo <= 0xdfff {
+					i = k + 6
+					continue
+				}
+			}
+			return utf8.RuneCountInString(cell[:start])
+		}
+		if 0xdc00 <= cp && cp <= 0xdfff {
+			// A paired low was consumed above, so reaching one here
+			// means it has no high before it. The prefix always ends on
+			// a backslash, so counting runes over it never splits one.
+			return utf8.RuneCountInString(cell[:start])
+		}
+
+		i = j + 5
+	}
+
+	return -1
+}
+
+// LoneSurrogateMessage is the message the runner uses when a shared cell
+// holds one. Exported so both runtimes say the same thing, and so a
+// caller building its own runner can reuse it rather than inventing a
+// vaguer one.
+func LoneSurrogateMessage(cell string, at int) string {
+	return fmt.Sprintf(
+		"expected cell holds an unpaired surrogate escape at code point %d: %q\n"+
+			"  A shared expected column CANNOT express this: JSON.parse preserves a lone surrogate\n"+
+			"  (a JavaScript string is UTF-16) and Go's encoding/json replaces it with U+FFFD\n"+
+			"  (a Go string is UTF-8). The two runtimes would be asked different questions and both\n"+
+			"  would pass. This is a recorded, permanent divergence - see DIVERGENCE.md.\n"+
+			"  Put the case in a per-runtime register column, where each decoding is written out,\n"+
+			"  or in each port's own suite with opposite assertions. A surrogate PAIR is fine here.",
+		at, cell)
 }
 
 // ParseExpect parses an expected cell as JSON. An empty cell is nil — the

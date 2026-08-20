@@ -270,6 +270,25 @@ func (r Runner) CheckRow(row *Row, input, expected string) error {
 		return nil
 	}
 
+	// Refuse a shared cell that the two runtimes would decode
+	// differently. LoneSurrogateAt says why; the short version is that
+	// this is the one thing a shared expected column cannot express, and
+	// that it fails SILENTLY - both runtimes pass, having been asked
+	// different questions. Audit item S2.
+	//
+	// Only on the DEFAULT path. ParseExpected exists because a fixture's
+	// vocabulary can be wider than JSON, and a wider vocabulary need not
+	// read \uXXXX as an escape at all - a hook treating `RAW:\ud800` as
+	// opaque text is asking a question both runtimes can answer
+	// identically, and refusing it would be this check inventing a
+	// problem. A hook whose syntax DOES use JSON escapes should call
+	// LoneSurrogateAt itself; it is exported for that.
+	if nil == r.ParseExpected {
+		if at := LoneSurrogateAt(expected); 0 <= at {
+			return fmt.Errorf("%s: %s", row.Where(), LoneSurrogateMessage(expected, at))
+		}
+	}
+
 	parseExpected := ParseExpect
 	if nil != r.ParseExpected {
 		parseExpected = func(cell string) (any, error) {

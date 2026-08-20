@@ -19,7 +19,8 @@ import {
 } from './spec'
 
 import {
-  isErrorExpect, errorExpect, parseExpect, equalValue, formatValue,
+  isErrorExpect, errorCode, errorExpect, parseExpect, equalValue,
+  formatValue, loneSurrogateAt, loneSurrogateMessage,
 } from './expect'
 
 
@@ -214,6 +215,27 @@ export class SpecRunner {
       }
 
       return
+    }
+
+    // Refuse a shared cell that the two runtimes would decode
+    // differently. `loneSurrogateAt` says why; the short version is that
+    // this is the one thing a shared expected column cannot express, and
+    // that it fails SILENTLY — both runtimes pass, having been asked
+    // different questions. Audit item S2.
+    //
+    // Only on the DEFAULT path. `parseExpected` exists because a
+    // fixture's vocabulary can be wider than JSON, and a wider vocabulary
+    // need not read `\uXXXX` as an escape at all — a hook treating
+    // `RAW:\ud800` as opaque text is asking a question both runtimes can
+    // answer identically, and refusing it would be this check inventing a
+    // problem. A hook whose syntax DOES use JSON escapes should call
+    // `loneSurrogateAt` itself; it is exported for that.
+    if (!opts.parseExpected) {
+      const loneAt = loneSurrogateAt(expected)
+      if (0 <= loneAt) {
+        throw new Error(
+          `${row.where()}: ${loneSurrogateMessage(expected, loneAt)}`)
+      }
     }
 
     const want = opts.parseExpected

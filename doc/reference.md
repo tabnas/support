@@ -262,6 +262,51 @@ directory under `npm test`.
 | `equalValue(got, expected, options?)` | `EqualValue(got, expected any) bool` |
 | — | `EqualValueWith(got, expected any, normalize func(any) any) bool` |
 | `formatValue(val): string` | `FormatValue(val any) string` |
+| `loneSurrogateAt(cell): number` | `LoneSurrogateAt(cell string) int` |
+| `loneSurrogateMessage(cell, at): string` | `LoneSurrogateMessage(cell string, at int) string` |
+
+### A shared expected cell cannot hold a lone surrogate
+
+The runner **refuses** a value cell containing an unpaired `\uXXXX`
+surrogate escape, naming the row — **on the default path only**. A suite
+supplying `parseExpected` / `ParseExpected` has a wider vocabulary than
+JSON, which need not read `\uXXXX` as an escape at all, so the check
+stands aside; call `loneSurrogateAt` from the hook if the syntax does use
+JSON escapes.
+
+The position is reported in **code points of the raw cell text** — the
+one unit the two ports agree on without conversion, since the natural
+index is a UTF-16 offset in TypeScript and a byte offset in Go. Counted
+over the raw text, so a written-out surrogate pair spells twelve
+characters.
+
+The two runtimes decode one differently, and neither is wrong:
+`JSON.parse` preserves it, because a JavaScript string is UTF-16 and may
+hold one; Go's `encoding/json` replaces it with U+FFFD, because a Go
+string is UTF-8 and cannot. Measured on the same cells:
+
+| cell | TypeScript | Go |
+|---|---|---|
+| `"\ud800"` | 1 unit, `d800` | 3 bytes, `ef bf bd` |
+| `"a\ud800b"` | `61 d800 62` | `61 ef bf bd 62` |
+| `"\ud83d\ude00"` | `d83d de00` | `f0 9f 98 80` — **agree** |
+
+So a shared cell holding one asks the two runtimes different questions
+and **both pass**. It is the one thing a shared expected column cannot
+express, and it fails silently, which is why this is an error rather than
+something to notice later.
+
+A surrogate **pair** is fine — both runtimes decode it to the same
+character. An `ERROR:` cell is unaffected: it carries no JSON.
+
+Where the case *does* belong: a **per-runtime register column**, where
+each decoding is written out and each runtime reads its own; or each
+port's own suite, asserting opposite results. `loneSurrogateAt` is
+exported so a suite with its own runner can apply the same rule.
+
+Only the escape form is detected, because it is the only one that can
+occur: a fixture file is UTF-8, and a lone surrogate has no UTF-8
+encoding, so it cannot appear literally in one.
 
 `equalValue` compares with **JSON semantics**, not the host language's:
 
@@ -289,6 +334,80 @@ The `normalize` hook rewrites every node on both sides, outermost first.
 This is where a runtime-specific container — an insertion-ordered map, a
 reference wrapper — is unwrapped into the plain value the fixture's JSON
 describes.
+
+
+## The divergence register
+
+Where the two ports of one grammar are known to **disagree**, and the
+difference has been argued rather than repaired (ADR-14).
+
+```js
+makeRegister({ parse, runtime: 'ts', runtimes: ['ts', 'go'] })
+  .file(Path.join(specDir, 'divergent.tsv'))
+```
+
+```go
+support.Register{
+    Runner:   support.Runner{Parse: parse},
+    Runtime:  "go",
+    Runtimes: []string{"ts", "go"},
+}.File(t, filepath.Join(specDir, "divergent.tsv"))
+```
+
+The fixture has an `input` column and **one column per runtime**, each
+written in the ordinary expected vocabulary — a JSON value, or
+`ERROR:<code>`:
+
+```
+input	ts	go
+"\uD800"	"\ud800"	"\ufffd"
+```
+
+Both suites run the same file and read different columns of it.
+
+### Why this is not just a fixture
+
+A fixture fails when behaviour **regresses**. A register also fails when the
+divergence is **fixed**.
+
+When a port is repaired to agree with the other, the register still claims
+they differ, so the suite goes red and names the row to delete:
+
+```
+divergent.tsv:12: this divergence is CLOSED. go now produces what the ts
+column records ("A"), not its own ("a").
+  This is the register working: a fixed divergence fails as loudly as a
+  regressed one, so the row cannot outlive it.
+  DELETE this row. Do not edit it to match — that would record a divergence
+  that no longer exists, which is what this mechanism exists to prevent.
+```
+
+That distinction is the whole point. A regression and a repair produce the
+same red build from a plain fixture, and the message sends the reader to
+the opposite conclusion in one of the two cases.
+
+The 2026-08 fleet audit found **29 recorded divergence claims contradicted
+by execution**, and one file that had been wrong in *both* directions at
+once. Prose does not hold, because nothing runs it. Neither does a
+divergence recorded only as a passing test of current behaviour, because a
+fix leaves it passing while it describes something that no longer happens.
+
+### Rules the register enforces
+
+- **A row must record a disagreement.** If every runtime column says the
+  same thing, the row asserts nothing and would pass forever — the shape of
+  the claims this replaces. It fails.
+- **Runtimes are named, not inferred** from the header, so a `note` or
+  `issue` column is not silently read as a runtime that "agrees" with a
+  sentence. Every named column must exist.
+- **A regression still reports as a mismatch**, not as a closed divergence.
+- **Comparison is the runner's**, unchanged. A register must not develop
+  its own idea of what "equal" means.
+
+`noDivergences(where)` / `NoDivergences(t, where)` declares that a repo has
+none, so the claim appears in the test output rather than being inferred
+from a file nobody notices is missing.
+
 
 ## Runner API
 

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -368,5 +369,67 @@ func TestFindSpecDirNotFound(t *testing.T) {
 	_, err := FindSpecDir(t.TempDir())
 	if nil == err || !strings.Contains(err.Error(), "no test") {
 		t.Errorf("err = %v", err)
+	}
+}
+
+// A symlinked fixture must load, because the TypeScript loader loads it.
+//
+// `DirEntry.IsDir()` answers about the LINK, so a symlink to a DIRECTORY
+// read as a file here and would have been handed to the reader. The
+// mirror defect was on the TypeScript side, where `Dirent.isFile()` is
+// false for a symlink and a symlinked `.tsv` was dropped while this
+// loader ran it. Measured on a spec dir holding `plain.tsv` and a
+// symlinked `linked.tsv`: Go saw both, TypeScript saw only `plain.tsv`.
+//
+// Both loaders now stat the entry, so both judge a name by what it
+// RESOLVES to. ts/test/spec.test.js asserts the same two things against
+// the same tree.
+func TestLoadSpecDirFollowsSymlinks(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write := func(p, s string) {
+		if err := os.WriteFile(p, []byte(s), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(filepath.Join(dir, "plain.tsv"), "in\tout\na\t1\n")
+	write(filepath.Join(dir, "sub", "target.tsv"), "in\tout\nb\t2\n")
+
+	// Creating a symlink needs a privilege or developer mode on Windows.
+	// Where it is refused there is nothing to assert.
+	if err := os.Symlink(filepath.Join("sub", "target.tsv"),
+		filepath.Join(dir, "linked.tsv")); err != nil {
+		t.Skipf("symlink not permitted here: %v", err)
+	}
+
+	// A DIRECTORY named `*.tsv` is not a fixture and must stay skipped.
+	if err := os.Mkdir(filepath.Join(dir, "trap.tsv"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// And a SYMLINK TO a directory, named `*.tsv`, is the case this
+	// loader got wrong. `DirEntry.IsDir()` is false for the link
+	// itself, so `!e.IsDir()` accepted it and handed it to the reader,
+	// which fails. Statting the entry follows the link and sees a
+	// directory. This is the half that goes red without the fix — the
+	// symlink-to-FILE above was already loaded here, and asserting only
+	// that would be a test green both ways.
+	if err := os.Symlink("sub", filepath.Join(dir, "linktrap.tsv")); err != nil {
+		t.Skipf("symlink not permitted here: %v", err)
+	}
+
+	files, err := LoadSpecDir(dir, nil)
+	if err != nil {
+		t.Fatalf("LoadSpecDir: %v", err)
+	}
+	var got []string
+	for _, f := range files {
+		got = append(got, f.Name)
+	}
+	sort.Strings(got)
+	if !reflect.DeepEqual(got, []string{"linked.tsv", "plain.tsv"}) {
+		t.Errorf("got %v, want [linked.tsv plain.tsv]", got)
 	}
 }
