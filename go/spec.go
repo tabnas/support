@@ -210,9 +210,33 @@ func LoadSpecDir(dir string, opts *Options) ([]*File, error) {
 		return nil, fmt.Errorf("spec directory not found: %s: %w", dir, err)
 	}
 
+	// Stat, not the raw dirent. `e.IsDir()` reports on the LINK, so a
+	// symlink to a directory reads as a file here and a symlink to a
+	// file reads as a file in Go while TypeScript's `Dirent.isFile()`
+	// says it is neither — the two ports then load different fixture
+	// sets from the same tree. Measured on a spec dir holding
+	// `plain.tsv` and a symlinked `linked.tsv`: Go ran both, TypeScript
+	// ran only `plain.tsv`. A row that runs in one runtime and not the
+	// other is the exact failure this package exists to prevent.
+	//
+	// Following the link and asking for a REGULAR file answers both
+	// halves at once: a directory named `foo.tsv` is still skipped
+	// (that hazard is what the original check was for), and a symlink
+	// is judged by what it points at.
 	var names []string
 	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".tsv") {
+		if !strings.HasSuffix(e.Name(), ".tsv") {
+			continue
+		}
+		info, err := os.Stat(filepath.Join(dir, e.Name()))
+		if err != nil {
+			// A dangling symlink names a fixture that is not there.
+			// Skipping it silently is the same silent-pass this loader
+			// refuses everywhere else.
+			return nil, fmt.Errorf("spec file not readable: %s: %w",
+				filepath.Join(dir, e.Name()), err)
+		}
+		if info.Mode().IsRegular() {
 			names = append(names, e.Name())
 		}
 	}
