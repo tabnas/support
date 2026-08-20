@@ -7,7 +7,6 @@ on:
   push:
     branches: [ main ]
   pull_request:
-    branches: [ main ]
 
 jobs:
   ci:
@@ -33,7 +32,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
         with:
           path: support
 
@@ -48,7 +47,7 @@ jobs:
       # dependencies at all, and go/adder/go.sum pins exactly one. The
       # workspace below overrides it with sibling source regardless.
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16  # v6.5.0
         with:
           go-version: "1.24"
           cache: false
