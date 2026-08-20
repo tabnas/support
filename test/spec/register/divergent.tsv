@@ -1,0 +1,20 @@
+input	ts	go
+# divergent.tsv -- the shape of a divergence register, used by this
+# package's own tests.
+#
+#   input  the source both ports are given.
+#   ts,go  what each port produces, in the ordinary expected vocabulary:
+#          a JSON value, or ERROR:<code>.
+#
+# A REAL register lives in the repo whose two ports disagree, and every row
+# is a divergence someone decided not to repair. This file is a stand-in so
+# the mechanism itself can be tested; the fake parser in the tests answers
+# these inputs.
+#
+# The rule that makes a register different from a fixture: a row must record
+# a DISAGREEMENT. Two cells saying the same thing assert nothing and would
+# pass forever -- which is how 29 prose divergence claims outlived the
+# divergences they described.
+a	"A"	"a"
+b	ERROR:bad_b	"b"
+c	"c"	ERROR:bad_c
