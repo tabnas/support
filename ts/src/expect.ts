@@ -61,6 +61,118 @@ export function parseExpect(expected: string): unknown {
 }
 
 
+// The index of the first UNPAIRED `\uXXXX` surrogate escape in an
+// expected cell, or -1.
+//
+// WHY THIS IS NOT A CURIOSITY. The two runtimes decode such an escape
+// differently, and neither is wrong: `JSON.parse` preserves it, because a
+// JavaScript string is UTF-16 and may hold one; Go's `encoding/json`
+// replaces it with U+FFFD, because a Go string is UTF-8 and cannot. That
+// is `parser/DIVERGENCE.md`'s first entry, deliberate and permanent.
+//
+// Measured on the same cells:
+//
+//     cell             TypeScript            Go
+//     "\ud800"         1 unit, d800          3 bytes, ef bf bd
+//     "a\ud800b"       61 d800 62            61 ef bf bd 62
+//     "\ud83d\ude00"  d83d de00             f0 9f 98 80    (a PAIR - agree)
+//
+// So a SHARED expected cell holding one asks the two runtimes different
+// questions and reports agreement either way. It is the one thing a
+// shared fixture cannot express, and it fails silently, which is why the
+// runner refuses it rather than leaving it to be noticed. Audit item S2.
+//
+// A PER-RUNTIME column is a different matter: there each runtime reads
+// its own cell, so writing the two decodings out explicitly is exactly
+// how a divergence register records this one. That path does not go
+// through this check.
+//
+// Only the ESCAPE form is detected, because it is the only one that can
+// occur: a fixture file is UTF-8, and a lone surrogate has no UTF-8
+// encoding, so it cannot appear literally in one.
+export function loneSurrogateAt(cell: string): number {
+  const hex4 = (at: number): number =>
+    at + 4 <= cell.length && /^[0-9a-fA-F]{4}$/.test(cell.slice(at, at + 4))
+      ? parseInt(cell.slice(at, at + 4), 16)
+      : -1
+
+  let i = 0
+  while (i < cell.length) {
+    if ('\\' !== cell[i]) {
+      i++
+      continue
+    }
+
+    // A run of backslashes escapes itself in pairs; only an ODD run
+    // leaves a live escape, whose introducer is the character after the
+    // whole run. `\\ud800` is a literal backslash then `ud800`.
+    let j = i
+    while (j < cell.length && '\\' === cell[j]) j++
+    if (0 === (j - i) % 2) {
+      i = j
+      continue
+    }
+
+    const start = j - 1
+    if ('u' !== cell[j]) {
+      i = j + 1
+      continue
+    }
+
+    const cp = hex4(j + 1)
+    if (cp < 0) {
+      i = j + 1
+      continue
+    }
+
+    if (0xd800 <= cp && cp <= 0xdbff) {
+      // A high surrogate is fine if a low follows IMMEDIATELY.
+      const k = j + 5
+      if ('\\' === cell[k] && 'u' === cell[k + 1]) {
+        const lo = hex4(k + 2)
+        if (0xdc00 <= lo && lo <= 0xdfff) {
+          i = k + 6
+          continue
+        }
+      }
+      return start
+    }
+    if (0xdc00 <= cp && cp <= 0xdfff) {
+      // A paired low was consumed above, so reaching one here means it
+      // has no high before it.
+      return start
+    }
+
+    i = j + 5
+  }
+
+  return -1
+}
+
+
+// The message the runner uses when a shared cell holds one. Exported so
+// both runtimes say the same thing, and so a caller building its own
+// runner can reuse it rather than inventing a vaguer one.
+export function loneSurrogateMessage(cell: string, at: number): string {
+  return (
+    `expected cell holds an unpaired surrogate escape at index ${at}: ` +
+    `${JSON.stringify(cell)}\n` +
+    '  A shared expected column CANNOT express this: JSON.parse preserves ' +
+    'a lone surrogate\n' +
+    '  (a JavaScript string is UTF-16) and Go\'s encoding/json replaces it ' +
+    'with U+FFFD\n' +
+    '  (a Go string is UTF-8). The two runtimes would be asked different ' +
+    'questions and both\n' +
+    '  would pass. This is a recorded, permanent divergence — see ' +
+    'DIVERGENCE.md.\n' +
+    '  Put the case in a per-runtime register column, where each decoding ' +
+    'is written out,\n' +
+    '  or in each port\'s own suite with opposite assertions. A surrogate ' +
+    'PAIR is fine here.'
+  )
+}
+
+
 // How to compare a parse result against an expected value.
 export type EqualOptions = {
   // Rewrite a value before it is compared. Applied to every node on both

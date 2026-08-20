@@ -235,6 +235,19 @@ func (r Runner) CheckRow(row *Row, input, expected string) error {
 		return nil
 	}
 
+	// Refuse a shared cell that the two runtimes would decode
+	// differently. LoneSurrogateAt says why; the short version is that
+	// this is the one thing a shared expected column cannot express, and
+	// that it fails SILENTLY - both runtimes pass, having been asked
+	// different questions. Audit item S2.
+	//
+	// Checked before ParseExpected as well as before ParseExpect: a
+	// custom hook decodes the same cell text with the same JSON rules and
+	// inherits the same asymmetry.
+	if at := LoneSurrogateAt(expected); 0 <= at {
+		return fmt.Errorf("%s: %s", row.Where(), LoneSurrogateMessage(expected, at))
+	}
+
 	parseExpected := ParseExpect
 	if nil != r.ParseExpected {
 		parseExpected = func(cell string) (any, error) {

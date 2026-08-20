@@ -8,8 +8,9 @@ const assert = require('node:assert')
 const Path = require('node:path')
 
 const {
-  findSpecDir, loadSpec,
+  findSpecDir, loadSpec, parseSpec, makeRunner,
   isErrorExpect, errorCode, parseExpect, equalValue, formatValue,
+  loneSurrogateAt,
 } = require('../dist/support.js')
 
 
@@ -100,6 +101,51 @@ describe('expect-equal', () => {
       // fixture's meaning depend on which column it was written in.
       assert.equal(equalValue(b, a), want, `${row.where()}: reversed`)
     }
+  })
+
+  it('spec: util/lone-surrogate.tsv', () => {
+    // Audit item S2. A lone surrogate escape in a SHARED expected cell is
+    // decoded differently by the two runtimes — preserved here, U+FFFD in
+    // Go — so the cell asks them different questions and both pass. The
+    // runner refuses such a cell; this pins the detector it uses, and
+    // go/expect_test.go runs the same rows.
+    //
+    // `cell` is the RAW cell text: `named` does not escape-decode, which
+    // is what makes the two `\\ud800` rows meaningful. Those are a
+    // JSON-escaped backslash followed by the letters `ud800`, not an
+    // escape at all, and they are what a detector that merely searched
+    // for the text would get wrong.
+    const spec = loadSpec(Path.join(SPEC, 'util', 'lone-surrogate.tsv'))
+    assert.ok(0 < spec.rows.length, 'no cases')
+
+    for (const row of spec.rows) {
+      const cell = row.named('cell')
+      const want = parseExpect(row.named('at'))
+      assert.equal(loneSurrogateAt(cell), want,
+        `${row.where()}: loneSurrogateAt(${JSON.stringify(cell)})`)
+    }
+  })
+
+  it('the runner refuses a shared cell holding a lone surrogate', () => {
+    // The detector is only half of it: what matters is that a fixture row
+    // carrying one FAILS rather than passing in both runtimes.
+    //
+    // Asserted through `row`, which throws, rather than `spec`, which
+    // registers a node:test case per row — the failure has to be visible
+    // to `assert.throws` for this test to mean anything.
+    const runner = makeRunner({ parse: () => 'x' })
+    const row = parseSpec('inline.tsv', 'input\texpected\nx\t"A"').rows[0]
+
+    assert.throws(
+      () => runner.row(row, 'x', '"\\ud800"'),
+      /unpaired surrogate escape at index 1/)
+
+    // A PAIR is fine — both runtimes decode it to the same character, so
+    // the shared column expresses it perfectly well. Without this row the
+    // refusal is also satisfied by rejecting every `\\u` escape.
+    const pairRunner = makeRunner({ parse: () => '\u{1F600}' })
+    assert.doesNotThrow(
+      () => pairRunner.row(row, 'x', '"\\ud83d\\ude00"'))
   })
 
   it('treats NaN as equal to itself', () => {

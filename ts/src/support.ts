@@ -32,7 +32,8 @@
  * Non-test consumers import the piece they need instead:
  *
  *   '@tabnas/support/spec'    parseSpec, loadSpec, loadSpecDir, findSpecDir
- *   '@tabnas/support/expect'  parseExpect, equalValue, formatValue, ...
+ *   '@tabnas/support/expect'  parseExpect, equalValue, formatValue,
+ *                             loneSurrogateAt, ...
  *   '@tabnas/support/escape'  escape, unescape
  *
  * Those three are runtime-safe: `escape` and `expect` are pure, and
@@ -54,6 +55,7 @@ export type { SpecOptions } from './spec'
 export {
   ERROR_PREFIX,
   isErrorExpect, errorCode, parseExpect, equalValue, formatValue,
+  loneSurrogateAt, loneSurrogateMessage,
 } from './expect'
 export type { EqualOptions } from './expect'
 

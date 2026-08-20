@@ -20,6 +20,7 @@ import {
 
 import {
   isErrorExpect, errorCode, parseExpect, equalValue, formatValue,
+  loneSurrogateAt, loneSurrogateMessage,
 } from './expect'
 
 
@@ -182,6 +183,21 @@ export class SpecRunner {
       }
 
       return
+    }
+
+    // Refuse a shared cell that the two runtimes would decode
+    // differently. `loneSurrogateAt` says why; the short version is that
+    // this is the one thing a shared expected column cannot express, and
+    // that it fails SILENTLY — both runtimes pass, having been asked
+    // different questions. Audit item S2.
+    //
+    // Checked before `parseExpected` as well as before `parseExpect`: a
+    // custom hook decodes the same cell text with the same JSON rules
+    // and inherits the same asymmetry.
+    const loneAt = loneSurrogateAt(expected)
+    if (0 <= loneAt) {
+      throw new Error(
+        `${row.where()}: ${loneSurrogateMessage(expected, loneAt)}`)
     }
 
     const want = opts.parseExpected

@@ -1,0 +1,34 @@
+cell	at
+# The index of the first UNPAIRED \uXXXX surrogate escape in an expected
+# cell, or -1. Audit item S2: a shared expected column cannot express a
+# lone surrogate, because JSON.parse preserves it and Go's encoding/json
+# replaces it with U+FFFD, so both runtimes pass having been asked
+# different questions. The runner refuses such a cell; this pins the
+# detector both runners use.
+#
+#   cell  the RAW expected-cell text, before any JSON decoding.
+#   at    JSON integer: the index, or -1 for none.
+#
+# The cells hold real backslashes, so a `\\` here is a JSON-escaped
+# backslash and NOT the start of an escape — the two `\\ud800` rows are
+# the ones that would break a detector which just searched for the text.
+"\ud800"	1
+"\udfff"	1
+"a\ud800b"	2
+"\ud800\ud800"	1
+"\ude00\ud83d"	1
+"\ud83d"	1
+"\ud83dx\ude00"	1
+"\ud83d😀"	1
+{"a":"\ud800"}	6
+"😀"	-1
+"𝄞"	-1
+"ok"	-1
+"\n"	-1
+"A"	-1
+"\uZZZZ"	-1
+"\\ud800"	-1
+"\\\\ud800"	-1
+"\\\ud800"	3
+	-1
+42	-1

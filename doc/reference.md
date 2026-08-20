@@ -218,6 +218,41 @@ directory under `npm test`.
 | `equalValue(got, expected, options?)` | `EqualValue(got, expected any) bool` |
 | — | `EqualValueWith(got, expected any, normalize func(any) any) bool` |
 | `formatValue(val): string` | `FormatValue(val any) string` |
+| `loneSurrogateAt(cell): number` | `LoneSurrogateAt(cell string) int` |
+| `loneSurrogateMessage(cell, at): string` | `LoneSurrogateMessage(cell string, at int) string` |
+
+### A shared expected cell cannot hold a lone surrogate
+
+The runner **refuses** a value cell containing an unpaired `\uXXXX`
+surrogate escape, naming the row.
+
+The two runtimes decode one differently, and neither is wrong:
+`JSON.parse` preserves it, because a JavaScript string is UTF-16 and may
+hold one; Go's `encoding/json` replaces it with U+FFFD, because a Go
+string is UTF-8 and cannot. Measured on the same cells:
+
+| cell | TypeScript | Go |
+|---|---|---|
+| `"\ud800"` | 1 unit, `d800` | 3 bytes, `ef bf bd` |
+| `"a\ud800b"` | `61 d800 62` | `61 ef bf bd 62` |
+| `"\ud83d\ude00"` | `d83d de00` | `f0 9f 98 80` — **agree** |
+
+So a shared cell holding one asks the two runtimes different questions
+and **both pass**. It is the one thing a shared expected column cannot
+express, and it fails silently, which is why this is an error rather than
+something to notice later.
+
+A surrogate **pair** is fine — both runtimes decode it to the same
+character. An `ERROR:` cell is unaffected: it carries no JSON.
+
+Where the case *does* belong: a **per-runtime register column**, where
+each decoding is written out and each runtime reads its own; or each
+port's own suite, asserting opposite results. `loneSurrogateAt` is
+exported so a suite with its own runner can apply the same rule.
+
+Only the escape form is detected, because it is the only one that can
+occur: a fixture file is UTF-8, and a lone surrogate has no UTF-8
+encoding, so it cannot appear literally in one.
 
 `equalValue` compares with **JSON semantics**, not the host language's:
 
