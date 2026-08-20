@@ -30,13 +30,84 @@ export function isErrorExpect(expected: string): boolean {
 
 // The code from an error expectation: `ERROR:unexpected` gives
 // `unexpected`, and a bare `ERROR` gives '' (meaning "any code").
+// A trailing `@<row>:<col>` is a position expectation and is NOT part of
+// the code — see `errorExpect`.
 // Throws when handed a cell that is not an error expectation at all.
 export function errorCode(expected: string): string {
+  return errorExpect(expected).code
+}
+
+
+// An error expectation, split into the parts a runner checks separately.
+export type ErrorExpect = {
+  // The code, or '' for "any code" (a bare `ERROR`, or a cell that pins
+  // only a position).
+  code: string
+
+  // 1-based source position the error must report, when the cell pins one.
+  // Both undefined otherwise.
+  row?: number
+  col?: number
+}
+
+
+// Trailing `@<row>:<col>`, anchored at the end and digits-only.
+//
+// Zero is matched here and REJECTED below rather than excluded by the
+// pattern, so `@0:0` fails as a malformed fixture instead of quietly
+// falling through and being read as part of the code.
+//
+// `@` rather than another colon because a code is not always a bare
+// identifier: the fleet's fixtures already carry `ERROR:a:b` and whole
+// diagnostic sentences with embedded colons, so `ERROR:x:1:8` could not be
+// split without guessing. Anchoring at the end and requiring digits keeps
+// a message that merely CONTAINS an `@` intact.
+const POSITION_SUFFIX = /@(\d+):(\d+)$/
+
+
+// Read an error expectation.
+//
+//   ERROR                     any error
+//   ERROR:unexpected          that code, position unchecked
+//   ERROR:unexpected@1:8      that code, reported at row 1 col 8
+//   ERROR:@1:8                any code, reported at row 1 col 8
+//
+// The position channel exists because a code alone does not pin a
+// diagnostic. Two runtimes can agree on `unexpected` and disagree on where
+// they say it happened — which is exactly what the fleet audit found, in
+// several repos at once, with every code row green. A fixture that pins
+// the position makes that disagreement a failing row instead of a
+// difference nobody is looking at.
+//
+// Throws when handed a cell that is not an error expectation at all.
+export function errorExpect(expected: string): ErrorExpect {
   if (!isErrorExpect(expected)) {
     throw new Error('not an error expectation: ' + JSON.stringify(expected))
   }
-  return ERROR_PREFIX === expected
+
+  let code = ERROR_PREFIX === expected
     ? '' : expected.slice(ERROR_PREFIX.length + 1)
+
+  const pos = code.match(POSITION_SUFFIX)
+  if (!pos) {
+    return { code }
+  }
+
+  const row = parseInt(pos[1], 10)
+  const col = parseInt(pos[2], 10)
+
+  // Positions are 1-based, so zero is not a position. It matters more than
+  // it looks: an error type that leaves `row`/`col` at their zero value
+  // when it has no position would MATCH `@0:0`, and the row would pass
+  // while pinning no source location at all — the exact silent gap this
+  // channel exists to close, reintroduced through its own syntax.
+  if (row < 1 || col < 1) {
+    throw new Error(
+      'position in an error expectation is 1-based, so 0 is not a ' +
+      'position: ' + JSON.stringify(expected))
+  }
+
+  return { code: code.slice(0, pos.index), row, col }
 }
 
 

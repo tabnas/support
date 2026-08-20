@@ -74,6 +74,8 @@ must raise:
 ```
 ERROR                 -- must fail, with any code
 ERROR:unexpected      -- must fail, with exactly this code
+ERROR:unexpected@1:8  -- ...and report it at row 1, column 8
+ERROR:@1:8            -- must fail at row 1 column 8, code unchecked
 ```
 
 The cell counts as an error expectation only when it is exactly `ERROR` or
@@ -83,6 +85,48 @@ compare the parse result at all — a row that silently tests nothing.
 
 The **code** is part of the contract. Two runtimes that reject the same
 input for different reasons have not agreed on anything.
+
+### Position
+
+A trailing `@<row>:<col>` pins where the error is reported, 1-based, and
+is checked in addition to the code.
+
+A code alone does not pin a diagnostic. Two runtimes can agree on
+`unexpected` and disagree entirely on where they say it happened — which
+is what the 2026-08 fleet audit found, in several repos at once, with
+every code row green. A fixture that pins the position turns that
+disagreement into a failing row instead of a difference nobody is looking
+at.
+
+The channel is **opt-in**: a cell with no `@` suffix is read exactly as
+before and its position is not checked, so adding this turned no existing
+row red.
+
+`@` rather than another colon because a code is not always a bare
+identifier — the fleet's fixtures carry `ERROR:a:b` and whole diagnostic
+sentences with embedded colons, so `ERROR:x:1:8` could not be split
+without guessing. The suffix is anchored at the end and digits-only, so a
+code that merely contains an `@` (`ERROR:user@example.com`) keeps it.
+
+Positions are **1-based**, and `@0:0` is rejected as a malformed fixture
+rather than read. An error type that leaves its `row`/`col` at zero when it
+has no position would otherwise *match* `@0:0`, and the row would pass
+while pinning no source location at all — this channel's own silent gap,
+reintroduced through its own syntax.
+
+An error that reports **no** position fails a row that pins one. The point
+of the channel is that "it failed somewhere" does not satisfy "it must
+fail here".
+
+By default the position is read from the error's `row`/`col` (TypeScript)
+or `Row`/`Col` fields or `Row()`/`Col()` methods (Go), which is what
+`TabnasError` carries. Use `errorPos` / `ErrorPos` for an error type that
+keeps it elsewhere.
+
+Position is checked independently of `matchError` / `MatchError`: those
+replace the *code* comparison only. A suite that has to match its codes by
+hand does not thereby lose the ability to pin a position, and the hook is
+handed the code with the suffix already stripped.
 
 An empty `expected` cell means "no value".
 
@@ -396,6 +440,7 @@ TypeScript builds a runner with `makeRunner(options)` (or
 | `parse` (2nd arg) | `ParseRow` | Parse one input, given the row as well. |
 | `errorCode` | `ErrorCode` | Extract the code from a failure. Optional. |
 | `matchError` | `MatchError` | Decide whether a failure satisfies `ERROR:<want>`, when a code cannot. Optional. |
+| `errorPos` | `ErrorPos` | Read the 1-based position a failure reports, for `ERROR:<code>@<row>:<col>` rows. Optional. |
 | `parseExpected` | `ParseExpected` | Read the expected cell, when the fixture's vocabulary is wider than JSON. Optional. |
 | `normalize` | `Normalize` | Rewrite values before comparison. Optional. |
 | `input` | `Input` / `InputName` | Input column. Default 0. |
@@ -488,7 +533,9 @@ on nothing and never will.
 `codesInSpecDir` walks a fixture directory with the shared loader
 (`loadSpecDir`, so a missing or empty directory is an **error**, not "no
 codes") and returns the codes its expectation cells exercise: sorted,
-unique. Only a **code-style** cell counts — `ERROR:` followed by a bare
+unique. A `@<row>:<col>` position suffix is stripped first, so a fixture
+that pins a position stays inside the census. Only a **code-style** cell
+counts — `ERROR:` followed by a bare
 `[a-z][a-z0-9_]*` token. A message-style expectation (`ERROR:bad token`,
 `ERROR:1:8`) and a bare `ERROR` assert a rejection without naming a
 code, and returning them would count coverage that is not there.

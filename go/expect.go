@@ -9,6 +9,7 @@ import (
 	"io"
 	"math"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -41,16 +42,112 @@ func IsErrorExpect(expected string) bool {
 
 // ErrorCode returns the code from an error expectation: "ERROR:unexpected"
 // gives "unexpected", and a bare "ERROR" gives "" (meaning "any code").
+// A trailing "@<row>:<col>" is a position expectation and is NOT part of
+// the code — see ErrorExpect.
 // It returns an error when handed a cell that is not an error expectation
 // at all.
 func ErrorCode(expected string) (string, error) {
+	ee, err := ErrorExpect(expected)
+	if nil != err {
+		return "", err
+	}
+	return ee.Code, nil
+}
+
+// ErrorExpectation is an error expectation, split into the parts a runner
+// checks separately.
+type ErrorExpectation struct {
+	// Code is the expected code, or "" for "any code" (a bare ERROR, or a
+	// cell that pins only a position).
+	Code string
+
+	// Row and Col are the 1-based source position the error must report,
+	// when the cell pins one. HasPos is false otherwise, which is what
+	// tells a pinned 0:0 apart from an unpinned position.
+	Row    int
+	Col    int
+	HasPos bool
+}
+
+// positionSuffix matches a trailing "@<row>:<col>", anchored at the end
+// and digits-only.
+//
+// Zero is matched here and REJECTED in ErrorExpect rather than excluded by
+// the pattern, so "@0:0" fails as a malformed fixture instead of quietly
+// falling through and being read as part of the code.
+//
+// "@" rather than another colon because a code is not always a bare
+// identifier: the fleet's fixtures already carry "ERROR:a:b" and whole
+// diagnostic sentences with embedded colons, so "ERROR:x:1:8" could not be
+// split without guessing. Anchoring at the end and requiring digits keeps
+// a message that merely CONTAINS an "@" intact.
+var positionSuffix = regexp.MustCompile(`@(\d+):(\d+)$`)
+
+// ErrorExpect reads an error expectation.
+//
+//	ERROR                     any error
+//	ERROR:unexpected          that code, position unchecked
+//	ERROR:unexpected@1:8      that code, reported at row 1 col 8
+//	ERROR:@1:8                any code, reported at row 1 col 8
+//
+// The position channel exists because a code alone does not pin a
+// diagnostic. Two runtimes can agree on "unexpected" and disagree on where
+// they say it happened — which is exactly what the fleet audit found, in
+// several repos at once, with every code row green. A fixture that pins
+// the position makes that disagreement a failing row instead of a
+// difference nobody is looking at.
+//
+// It returns an error when handed a cell that is not an error expectation
+// at all.
+//
+// ts/src/expect.ts mirrors this.
+func ErrorExpect(expected string) (ErrorExpectation, error) {
 	if !IsErrorExpect(expected) {
-		return "", fmt.Errorf("not an error expectation: %q", expected)
+		return ErrorExpectation{},
+			fmt.Errorf("not an error expectation: %q", expected)
 	}
-	if ErrorPrefix == expected {
-		return "", nil
+
+	code := ""
+	if ErrorPrefix != expected {
+		code = expected[len(ErrorPrefix)+1:]
 	}
-	return expected[len(ErrorPrefix)+1:], nil
+
+	loc := positionSuffix.FindStringSubmatchIndex(code)
+	if nil == loc {
+		return ErrorExpectation{Code: code}, nil
+	}
+
+	// Atoi cannot fail here: the regexp already constrained both groups to
+	// digits. A very long run of them can overflow, which Atoi reports and
+	// which is a malformed fixture, not a mismatch.
+	row, err := strconv.Atoi(code[loc[2]:loc[3]])
+	if nil != err {
+		return ErrorExpectation{}, fmt.Errorf(
+			"invalid row in error expectation %q: %w", expected, err)
+	}
+	col, err := strconv.Atoi(code[loc[4]:loc[5]])
+	if nil != err {
+		return ErrorExpectation{}, fmt.Errorf(
+			"invalid column in error expectation %q: %w", expected, err)
+	}
+
+	// Positions are 1-based, so zero is not a position. It matters more
+	// than it looks: an error type that leaves Row/Col at their zero value
+	// when it has no position would MATCH "@0:0", and the row would pass
+	// while pinning no source location at all — the exact silent gap this
+	// channel exists to close, reintroduced through its own syntax.
+	if row < 1 || col < 1 {
+		return ErrorExpectation{}, fmt.Errorf(
+			"position in an error expectation is 1-based, so 0 is not a "+
+				"position: %q", expected)
+	}
+
+	return ErrorExpectation{
+		Code:   code[:loc[0]],
+		Row:    row,
+		Col:    col,
+		HasPos: true,
+	}, nil
 }
 
 // LoneSurrogateAt returns the position of the first UNPAIRED \uXXXX

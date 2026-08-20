@@ -520,3 +520,152 @@ func TestRunnerParseExpectedNotReachedForError(t *testing.T) {
 		t.Error("ParseExpected was consulted for an ERROR row")
 	}
 }
+
+// --- The position channel: ERROR:<code>@<row>:<col> ---
+//
+// A code alone does not pin a diagnostic. These tests exist because the
+// channel is only worth having if a WRONG position fails: a check that
+// cannot fail is the bug it was added to prevent.
+
+// posErr carries a position the way *TabnasError does, as exported int
+// fields, so the runner's default reader has to find them by reflection
+// with no hook configured.
+type posErr struct {
+	Code string
+	Row  int
+	Col  int
+}
+
+func (e *posErr) Error() string { return e.Code }
+
+// codeOnlyErr carries a code and NO position, which is what most error
+// types in the fleet look like today.
+type codeOnlyErr struct{ Code string }
+
+func (e *codeOnlyErr) Error() string { return e.Code }
+
+func posFixture(t *testing.T) *File {
+	t.Helper()
+	return mustParse(t, "t.tsv", strings.Join([]string{
+		"input\texpected",
+		"b\tERROR:bad_b@1:8",
+		"b\tERROR:@1:8",
+		"b\tERROR:bad_b",
+	}, "\n"), nil)
+}
+
+func TestRunnerPassesPinnedPosition(t *testing.T) {
+	r := Runner{Parse: func(string) (any, error) {
+		return nil, &posErr{Code: "bad_b", Row: 1, Col: 8}
+	}}
+	if err := check(t, r, posFixture(t), 0); err != nil {
+		t.Errorf("got %v", err)
+	}
+}
+
+func TestRunnerFailsWrongPosition(t *testing.T) {
+	// The right code at the wrong place. This is the exact shape the fleet
+	// audit found: every code row green, the positions disagreeing.
+	r := Runner{Parse: func(string) (any, error) {
+		return nil, &posErr{Code: "bad_b", Row: 1, Col: 9}
+	}}
+
+	err := check(t, r, posFixture(t), 0)
+	if nil == err {
+		t.Fatal("expected a failure: right code, wrong column")
+	}
+	if !strings.Contains(err.Error(), "1:9") ||
+		!strings.Contains(err.Error(), "expected 1:8") {
+		t.Errorf("failure should report both positions, got %v", err)
+	}
+}
+
+func TestRunnerFailsMissingPosition(t *testing.T) {
+	// An error that names no position has not met an expectation that says
+	// where it must fail. Passing here would make the channel silently
+	// optional, which is worse than not having it.
+	// The right code, so the code check passes and the position check is
+	// what has to reject this row.
+	r := Runner{Parse: func(string) (any, error) {
+		return nil, &codeOnlyErr{Code: "bad_b"}
+	}}
+
+	err := check(t, r, posFixture(t), 0)
+	if nil == err {
+		t.Fatal("expected a failure: error carries no position")
+	}
+	if !strings.Contains(err.Error(), "no position") {
+		t.Errorf("failure should say the error had no position, got %v", err)
+	}
+}
+
+func TestRunnerPositionWithoutCode(t *testing.T) {
+	// `ERROR:@1:8` pins where it failed, not what it was called.
+	r := Runner{Parse: func(string) (any, error) {
+		return nil, &posErr{Code: "anything_at_all", Row: 1, Col: 8}
+	}}
+	if err := check(t, r, posFixture(t), 1); err != nil {
+		t.Errorf("got %v", err)
+	}
+
+	r = Runner{Parse: func(string) (any, error) {
+		return nil, &posErr{Code: "anything_at_all", Row: 2, Col: 8}
+	}}
+	if err := check(t, r, posFixture(t), 1); nil == err {
+		t.Fatal("expected a failure: position pinned, code not")
+	}
+}
+
+func TestRunnerUnpinnedPositionIsNotChecked(t *testing.T) {
+	// Row 2 pins only the code. Every existing fixture in the fleet is this
+	// shape, so a wrong position here must still PASS — the channel is
+	// opt-in, and adding it must not turn 307 green error rows red.
+	r := Runner{Parse: func(string) (any, error) {
+		return nil, &posErr{Code: "bad_b", Row: 99, Col: 99}
+	}}
+	if err := check(t, r, posFixture(t), 2); err != nil {
+		t.Errorf("an unpinned position must not be checked, got %v", err)
+	}
+}
+
+func TestRunnerErrorPosHook(t *testing.T) {
+	// For an error type that carries its position somewhere the default
+	// reader cannot see.
+	r := Runner{
+		Parse: func(string) (any, error) {
+			return nil, errors.New("bad_b at 1:8")
+		},
+		ErrorCode: func(err error) string { return "bad_b" },
+		ErrorPos: func(err error) (int, int, bool) {
+			return 1, 8, true
+		},
+	}
+	if err := check(t, r, posFixture(t), 0); err != nil {
+		t.Errorf("got %v", err)
+	}
+}
+
+func TestRunnerPositionCheckedAlongsideMatchError(t *testing.T) {
+	// MatchError replaces the CODE comparison, not the position one: a
+	// suite that has to match its codes by hand should not thereby lose
+	// the ability to pin a position. The hook must also see the code with
+	// the position suffix already stripped.
+	seen := ""
+	r := Runner{
+		Parse: func(string) (any, error) {
+			return nil, &posErr{Code: "bad_b", Row: 2, Col: 2}
+		},
+		MatchError: func(_ error, want string, _ *Row) bool {
+			seen = want
+			return true
+		},
+	}
+
+	err := check(t, r, posFixture(t), 0)
+	if nil == err {
+		t.Fatal("expected a failure: MatchError passed, position did not")
+	}
+	if "bad_b" != seen {
+		t.Errorf("MatchError saw %q, want the code without the suffix", seen)
+	}
+}
