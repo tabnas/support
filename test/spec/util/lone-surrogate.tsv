@@ -21,6 +21,18 @@ cell	at
 "\ud83dx\ude00"	1
 "\ud83d😀"	1
 {"a":"\ud800"}	6
+# Non-ASCII BEFORE the escape. The position is counted in CODE POINTS,
+# which is the only unit the two ports agree on without conversion: the
+# natural index is a UTF-16 offset in TypeScript and a BYTE offset in Go,
+# and for the first row below those are 2 and 3. Counted over the RAW
+# CELL TEXT, so a pair spells twelve characters: the last row is 14, not
+# 4. Raised in review, and a
+# parity helper reporting a port-dependent number is exactly the defect
+# this file exists to prevent.
+"é\ud800"	2
+"€€\ud800"	3
+"😀\ud800"	2
+"é\ud83d\ude00\ud800"	14
 "😀"	-1
 "𝄞"	-1
 "ok"	-1

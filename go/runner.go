@@ -241,11 +241,17 @@ func (r Runner) CheckRow(row *Row, input, expected string) error {
 	// that it fails SILENTLY - both runtimes pass, having been asked
 	// different questions. Audit item S2.
 	//
-	// Checked before ParseExpected as well as before ParseExpect: a
-	// custom hook decodes the same cell text with the same JSON rules and
-	// inherits the same asymmetry.
-	if at := LoneSurrogateAt(expected); 0 <= at {
-		return fmt.Errorf("%s: %s", row.Where(), LoneSurrogateMessage(expected, at))
+	// Only on the DEFAULT path. ParseExpected exists because a fixture's
+	// vocabulary can be wider than JSON, and a wider vocabulary need not
+	// read \uXXXX as an escape at all - a hook treating `RAW:\ud800` as
+	// opaque text is asking a question both runtimes can answer
+	// identically, and refusing it would be this check inventing a
+	// problem. A hook whose syntax DOES use JSON escapes should call
+	// LoneSurrogateAt itself; it is exported for that.
+	if nil == r.ParseExpected {
+		if at := LoneSurrogateAt(expected); 0 <= at {
+			return fmt.Errorf("%s: %s", row.Where(), LoneSurrogateMessage(expected, at))
+		}
 	}
 
 	parseExpected := ParseExpect

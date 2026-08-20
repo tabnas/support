@@ -138,7 +138,7 @@ describe('expect-equal', () => {
 
     assert.throws(
       () => runner.row(row, 'x', '"\\ud800"'),
-      /unpaired surrogate escape at index 1/)
+      /unpaired surrogate escape at code point 1/)
 
     // A PAIR is fine — both runtimes decode it to the same character, so
     // the shared column expresses it perfectly well. Without this row the
@@ -146,6 +146,27 @@ describe('expect-equal', () => {
     const pairRunner = makeRunner({ parse: () => '\u{1F600}' })
     assert.doesNotThrow(
       () => pairRunner.row(row, 'x', '"\\ud83d\\ude00"'))
+  })
+
+  it('leaves a custom parseExpected hook to its own vocabulary', () => {
+    // `parseExpected` exists because a fixture's vocabulary can be wider
+    // than JSON, and a wider vocabulary need not read `\uXXXX` as an
+    // escape at all. A hook treating the cell as opaque text is asking a
+    // question both runtimes answer identically, so refusing it would be
+    // the guard inventing a problem. Raised in review.
+    //
+    // A hook whose syntax DOES use JSON escapes should call
+    // `loneSurrogateAt` itself — which is why it is exported, and why
+    // this test asserts the hook still SEES the raw cell.
+    let seen = null
+    const runner = makeRunner({
+      parse: () => 'RAW:\\ud800',
+      parseExpected: (cell) => { seen = cell; return cell },
+    })
+    const row = parseSpec('inline.tsv', 'input\texpected\nx\t"A"').rows[0]
+
+    assert.doesNotThrow(() => runner.row(row, 'x', 'RAW:\\ud800'))
+    assert.equal(seen, 'RAW:\\ud800')
   })
 
   it('treats NaN as equal to itself', () => {

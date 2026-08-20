@@ -61,8 +61,17 @@ export function parseExpect(expected: string): unknown {
 }
 
 
-// The index of the first UNPAIRED `\uXXXX` surrogate escape in an
-// expected cell, or -1.
+// The position of the first UNPAIRED `\uXXXX` surrogate escape in an
+// expected cell, counted in CODE POINTS, or -1.
+//
+// Code points because this number crosses the two runtimes. The natural
+// index here is a UTF-16 offset and in `go/expect.go` it is a BYTE
+// offset, and those disagree the moment anything non-ASCII precedes the
+// escape: for `"é\ud800"` they are 2 and 3. A helper whose whole purpose
+// is to keep the two ports saying the same thing cannot report a number
+// that depends on which port asked. A code-point count is the same in
+// both by definition, and it is also what someone counting characters in
+// a TSV cell would arrive at.
 //
 // WHY THIS IS NOT A CURIOSITY. The two runtimes decode such an escape
 // differently, and neither is wrong: `JSON.parse` preserves it, because a
@@ -135,12 +144,12 @@ export function loneSurrogateAt(cell: string): number {
           continue
         }
       }
-      return start
+      return codePointsBefore(cell, start)
     }
     if (0xdc00 <= cp && cp <= 0xdfff) {
       // A paired low was consumed above, so reaching one here means it
       // has no high before it.
-      return start
+      return codePointsBefore(cell, start)
     }
 
     i = j + 5
@@ -150,12 +159,21 @@ export function loneSurrogateAt(cell: string): number {
 }
 
 
+// Code points in `cell` before the UTF-16 index `at`. The prefix always
+// ends on a backslash, so it never splits a surrogate pair.
+function codePointsBefore(cell: string, at: number): number {
+  let n = 0
+  for (const _ of cell.slice(0, at)) n++
+  return n
+}
+
+
 // The message the runner uses when a shared cell holds one. Exported so
 // both runtimes say the same thing, and so a caller building its own
 // runner can reuse it rather than inventing a vaguer one.
 export function loneSurrogateMessage(cell: string, at: number): string {
   return (
-    `expected cell holds an unpaired surrogate escape at index ${at}: ` +
+    `expected cell holds an unpaired surrogate escape at code point ${at}: ` +
     `${JSON.stringify(cell)}\n` +
     '  A shared expected column CANNOT express this: JSON.parse preserves ' +
     'a lone surrogate\n' +

@@ -224,7 +224,17 @@ directory under `npm test`.
 ### A shared expected cell cannot hold a lone surrogate
 
 The runner **refuses** a value cell containing an unpaired `\uXXXX`
-surrogate escape, naming the row.
+surrogate escape, naming the row — **on the default path only**. A suite
+supplying `parseExpected` / `ParseExpected` has a wider vocabulary than
+JSON, which need not read `\uXXXX` as an escape at all, so the check
+stands aside; call `loneSurrogateAt` from the hook if the syntax does use
+JSON escapes.
+
+The position is reported in **code points of the raw cell text** — the
+one unit the two ports agree on without conversion, since the natural
+index is a UTF-16 offset in TypeScript and a byte offset in Go. Counted
+over the raw text, so a written-out surrogate pair spells twelve
+characters.
 
 The two runtimes decode one differently, and neither is wrong:
 `JSON.parse` preserves it, because a JavaScript string is UTF-16 and may

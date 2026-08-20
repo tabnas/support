@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // expect.go — reading the expected column, and comparing a parse result
@@ -52,33 +53,17 @@ func ErrorCode(expected string) (string, error) {
 	return expected[len(ErrorPrefix)+1:], nil
 }
 
-// ParseExpect parses an expected cell as JSON. An empty cell is nil — the
-// fixture convention for "no value", as in a utility whose result is
-// nothing at all.
+// LoneSurrogateAt returns the position of the first UNPAIRED \uXXXX
+// surrogate escape in an expected cell, counted in CODE POINTS, or -1.
 //
-// The cell is NOT escape-decoded first: it is JSON, and JSON has its own
-// escape rules. Decoding it here would turn the two characters \n inside a
-// JSON string into a real newline, which is not valid JSON.
-//
-// Unlike the TypeScript side, an empty cell and a literal "null" both give
-// nil — Go has no separate undefined. A cross-runtime fixture should
-// therefore write "null" rather than leaving the cell empty when the value
-// really is null.
-//
-// A number too large for float64 (1e400) becomes ±Inf, matching what
-// canonical JSON.parse produces. encoding/json rejects it outright, which
-// would mean a fixture row that runs in TypeScript and fails to load at
-// all in Go — a divergence introduced by this package, in the one place
-// it least belongs. A JSON parser's own fixtures reach here: the
-// must-accept half of nst/JSONTestSuite includes numbers that overflow.
-//
-// What neither runtime can do is carry an integer beyond 2^53 exactly;
-// JSON.parse reads 9007199254740993 as ...992 and so does this. That
-// limit is the canonical runtime's, so it is shared rather than papered
-// over — do not pin such an integer in a fixture and expect either side
-// to tell it from its neighbour.
-// LoneSurrogateAt returns the index of the first UNPAIRED \uXXXX
-// surrogate escape in an expected cell, or -1.
+// Code points because this number crosses the two runtimes. The natural
+// index here is a BYTE offset and in ts/src/expect.ts it is a UTF-16
+// offset, and those disagree the moment anything non-ASCII precedes the
+// escape: for `"é\ud800"` they are 3 and 2. A helper whose whole purpose
+// is to keep the two ports saying the same thing cannot report a number
+// that depends on which port asked. A code-point count is the same in
+// both by definition, and it is also what someone counting characters in
+// a TSV cell would arrive at.
 //
 // WHY THIS IS NOT A CURIOSITY. The two runtimes decode such an escape
 // differently, and neither is wrong: JavaScript's JSON.parse preserves
@@ -168,12 +153,13 @@ func LoneSurrogateAt(cell string) int {
 					continue
 				}
 			}
-			return start
+			return utf8.RuneCountInString(cell[:start])
 		}
 		if 0xdc00 <= cp && cp <= 0xdfff {
 			// A paired low was consumed above, so reaching one here
-			// means it has no high before it.
-			return start
+			// means it has no high before it. The prefix always ends on
+			// a backslash, so counting runes over it never splits one.
+			return utf8.RuneCountInString(cell[:start])
 		}
 
 		i = j + 5
@@ -188,7 +174,7 @@ func LoneSurrogateAt(cell string) int {
 // vaguer one.
 func LoneSurrogateMessage(cell string, at int) string {
 	return fmt.Sprintf(
-		"expected cell holds an unpaired surrogate escape at index %d: %q\n"+
+		"expected cell holds an unpaired surrogate escape at code point %d: %q\n"+
 			"  A shared expected column CANNOT express this: JSON.parse preserves a lone surrogate\n"+
 			"  (a JavaScript string is UTF-16) and Go's encoding/json replaces it with U+FFFD\n"+
 			"  (a Go string is UTF-8). The two runtimes would be asked different questions and both\n"+
@@ -198,6 +184,31 @@ func LoneSurrogateMessage(cell string, at int) string {
 		at, cell)
 }
 
+// ParseExpect parses an expected cell as JSON. An empty cell is nil — the
+// fixture convention for "no value", as in a utility whose result is
+// nothing at all.
+//
+// The cell is NOT escape-decoded first: it is JSON, and JSON has its own
+// escape rules. Decoding it here would turn the two characters \n inside a
+// JSON string into a real newline, which is not valid JSON.
+//
+// Unlike the TypeScript side, an empty cell and a literal "null" both give
+// nil — Go has no separate undefined. A cross-runtime fixture should
+// therefore write "null" rather than leaving the cell empty when the value
+// really is null.
+//
+// A number too large for float64 (1e400) becomes ±Inf, matching what
+// canonical JSON.parse produces. encoding/json rejects it outright, which
+// would mean a fixture row that runs in TypeScript and fails to load at
+// all in Go — a divergence introduced by this package, in the one place
+// it least belongs. A JSON parser's own fixtures reach here: the
+// must-accept half of nst/JSONTestSuite includes numbers that overflow.
+//
+// What neither runtime can do is carry an integer beyond 2^53 exactly;
+// JSON.parse reads 9007199254740993 as ...992 and so does this. That
+// limit is the canonical runtime's, so it is shared rather than papered
+// over — do not pin such an integer in a fixture and expect either side
+// to tell it from its neighbour.
 func ParseExpect(expected string) (any, error) {
 	if "" == expected {
 		return nil, nil

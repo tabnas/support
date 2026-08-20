@@ -396,7 +396,7 @@ func TestRunnerRefusesLoneSurrogateCell(t *testing.T) {
 	if nil == rerr {
 		t.Fatal("a lone surrogate cell was accepted")
 	}
-	if !strings.Contains(rerr.Error(), "unpaired surrogate escape at index 1") {
+	if !strings.Contains(rerr.Error(), "unpaired surrogate escape at code point 1") {
 		t.Errorf("wrong message: %v", rerr)
 	}
 
@@ -408,5 +408,37 @@ func TestRunnerRefusesLoneSurrogateCell(t *testing.T) {
 	}}
 	if perr := pair.CheckRow(row, "x", `"\ud83d\ude00"`); nil != perr {
 		t.Errorf("a surrogate PAIR was refused: %v", perr)
+	}
+}
+
+// ParseExpected exists because a fixture's vocabulary can be wider than
+// JSON, and a wider vocabulary need not read \uXXXX as an escape at all.
+// A hook treating the cell as opaque text is asking a question both
+// runtimes answer identically, so refusing it would be the guard
+// inventing a problem. Raised in review.
+//
+// A hook whose syntax DOES use JSON escapes should call LoneSurrogateAt
+// itself - which is why it is exported, and why this asserts the hook
+// still SEES the raw cell.
+func TestCustomParseExpectedKeepsItsOwnVocabulary(t *testing.T) {
+	spec, err := ParseSpec("inline.tsv", "input\texpected\nx\t\"A\"", nil)
+	if nil != err {
+		t.Fatal(err)
+	}
+	row := spec.Rows[0]
+
+	seen := ""
+	r := Runner{
+		Parse: func(string) (any, error) { return `RAW:\ud800`, nil },
+		ParseExpected: func(cell string, _ *Row) (any, error) {
+			seen = cell
+			return cell, nil
+		},
+	}
+	if rerr := r.CheckRow(row, "x", `RAW:\ud800`); nil != rerr {
+		t.Fatalf("a custom hook's cell was refused: %v", rerr)
+	}
+	if seen != `RAW:\ud800` {
+		t.Errorf("hook saw %q, want the raw cell", seen)
 	}
 }
