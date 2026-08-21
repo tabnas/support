@@ -2,6 +2,8 @@
 
 Shared test-support utilities for the **tabnas** parser system.
 
+Docs, guides, the error reference and the playground: **[tabnas.dev](https://tabnas.dev)**.
+
 Every tabnas package ([parser](https://github.com/tabnas/parser),
 [json](https://github.com/tabnas/json),
 [jsonic](https://github.com/tabnas/jsonic),
