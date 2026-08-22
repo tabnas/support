@@ -28,7 +28,7 @@ package tabnassupport
 
 // VERSION is the release version, kept in step with ts/package.json —
 // see version_test.go, which fails the build when they drift.
-const VERSION = "0.3.3"
+const VERSION = "0.3.4"
 
 // Bool returns a pointer to b, for the *bool fields in Options. Go has no
 // literal address-of, and a helper reads better than a named temporary at
