@@ -286,10 +286,19 @@ The steps, in order:
    cd go
    go mod edit -json | grep -q '"Replace": null' || { echo 'go.mod has a replace'; exit 1; }
    GOWORK=off go test -count=1 ./...
+   (cd adder && GOWORK=off go test -count=1 ./...)
    ```
 
    `-count=1` because shared fixtures live outside the Go module, so a
    changed corpus does not invalidate the test cache.
+
+   **`./...` from `go/` does not reach `go/adder`.** It is a separate module,
+   and `go test ./...` stops at the module boundary — verified: the run above
+   reports only `github.com/tabnas/support/go`. A change that breaks only the
+   adder passes this step unless you enter that directory, so the second line
+   is not redundant. `make test-go test-go-adder` runs both. Note `adder`'s
+   own `go.mod` carries `replace github.com/tabnas/support/go => ../` by
+   design, so the no-replace assertion above applies to `go/` only.
 3. **Merge the bump through a reviewed PR.** That is the house convention —
    `CONTRIBUTING.md` squash-merges PRs and takes the title as the commit
    message — and what `release.yml`'s own header describes. A direct push to
@@ -310,23 +319,44 @@ The steps, in order:
    V=x.y.z
    REL=$(git rev-parse origin/main)   # capture BEFORE dispatching
    npm view @tabnas/support@$V version
-   for T in "ts/v$V" "go/v$V"; do
+   npm view @tabnas/support@$V dist.attestations   # empty = unattested
+   for T in "ts/v$V" "go/v$V" "go/adder/v$V"; do
      S=$(git ls-remote origin "refs/tags/$T" | cut -f1)
      [ -n "$S" ] || { echo "missing tag $T"; exit 1; }
      [ "$S" = "$REL" ] || { echo "$T is $S, expected $REL"; exit 1; }
    done
    ```
 
+   **The dispatch does not create `go/adder/vX.Y.Z`.** `release.yml` writes
+   `ts/v$V` and `go/v$V` and nothing else — grep it for `adder` and you get
+   no hits. But this repo's own tag table says that third tag is required:
+   *"Without it the module is unresolvable, because Go finds a nested module
+   only under its own path prefix."* So a dispatch-only release publishes npm,
+   tags the main Go module, and leaves `github.com/tabnas/support/go/adder`
+   unresolvable at the new version. A session cannot push a tag (HTTP 403 on
+   tag refs), so this is the one step here that genuinely needs a maintainer:
+   `make publish-go V=x.y.z` pushes `go/v` and `go/adder/v` together. Hand
+   over explicitly, and do not call the release finished until all three
+   refs are present.
+
+   **Check `dist.attestations`, not just that the version exists.** The
+   workflow fails *open* on an already-published version, so a version that
+   reached npm by some other route satisfies `npm view … version` while
+   carrying no provenance — which is exactly how 0.1.1 shipped unattested,
+   as the Makefile records. An empty field means the artifact is not
+   attested, whatever the tags say.
+
    Counting the refs is not enough either. `grep v$V` exits 0 when *either*
    ref matches; a bare `wc -l` prints the count and exits 0 regardless; and
-   even `[ "$n" = 2 ]` passes in the case this section warns about, because an
-   anchor fallback writes *both* tags on a commit npm never served — and two
-   wrong tags count as two. Comparing each tag against the commit you
-   released is what catches that.
+   a bare count passes in the case this section warns about, because an
+   anchor fallback writes the tags on a commit npm never served — and wrong
+   tags count the same as right ones. Comparing each against the commit you
+   released is what catches that, and it also catches a `make publish-go`
+   run from a `main` that has since moved.
 
-   The refs carry the commit directly: `release.yml` creates them with
-   `git tag "$T" "$ANCHOR"`, so they are lightweight and there is no `^{}`
-   to peel.
+   The refs carry the commit directly: both `release.yml` (`git tag "$T"
+   "$ANCHOR"`) and `make publish-go` create lightweight tags, so there is no
+   `^{}` to peel.
 
 ### When a dispatch dies half-way
 
