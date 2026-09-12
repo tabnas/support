@@ -254,8 +254,17 @@ The steps, in order:
    That last one is easy to miss because `go/adder/` is a separate module:
    it pins the version of this one, so leaving it behind fails
    `TestVersionMatchesAdderRequire` in step 2, before you can merge.
-   `make version V=x.y.z` moves all of them. Drift is caught by
-   `ts/test/version.test.js` and `go/version_test.go`.
+   `make version V=x.y.z` moves all of them — the lockfile included, as a
+   side effect of the `npm version` it runs.
+
+   Drift is caught for **four** of the five, not all: `ts/test/version.test.js`
+   pins `ts/src/support.ts` to `ts/package.json`, and `go/version_test.go`
+   pins `go/support.go` and the `go/adder/go.mod` require to it. Nothing
+   asserts the lockfile's own version field — `ts/test/enginepin.test.js`
+   does read the lockfile, but only for the `@tabnas/parser` pin. So a bump
+   made by hand instead of by `make version` can leave `ts/package-lock.json`
+   behind with every test named here still green. Use `make version`; if you
+   edit by hand anyway, check the lockfile yourself.
 2. Verify against the **published** dependencies rather than your checkout.
    The release runner installs fresh from the registry; a working tree
    usually does not, so reproduce that before believing anything:
