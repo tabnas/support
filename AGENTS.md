@@ -241,25 +241,50 @@ the only one an agent can take: **a session's credentials cannot push tag
 refs — `git push origin ts/v…` fails with HTTP 403**, while branch pushes
 from the same credentials succeed. It is a ref-type boundary, not a broken
 token or a network fault. Nothing is lost by never touching a tag, because
-the workflow creates both tags itself — in one atomic push, *after* npm
+the workflow creates both tags itself, in one atomic push, *after* npm
 accepts the publish. Pushing a tag by hand is the orchestrator's path
 (`admin/publish.sh`), not yours.
 
 The steps, in order:
 
-1. Bump all **three** version sites together — `ts/package.json`, `VERSION`
-   in `ts/src/support.ts` and `const VERSION` in `go/support.go`. They are
-   held equal by `ts/test/version.test.js` and `go/version_test.go`.
-2. Verify, building first:
+1. Bump all **four** version sites together — `ts/package.json`, `VERSION`
+   in `ts/src/support.ts`, `const VERSION` in `go/support.go` and
+   `ts/package-lock.json` (regenerated, not hand-edited). Drift is caught by
+   `ts/test/version.test.js` and `go/version_test.go`.
+2. Verify against the **published** dependencies rather than your checkout.
+   The release runner installs fresh from the registry; a working tree
+   usually does not, so reproduce that before believing anything:
 
    ```bash
-   (cd ts && npm run build && npm test)
-   (cd go && GOWORK=off go test ./...)   # only sound with no `replace` — see below
+   cd ts
+   # package-lock.json is TRACKED here — regenerate it, do not delete it
+   rm -rf node_modules
+   npm install
+   npm test
    ```
 
-   This package's `npm test` happens to run `npm run build` first, so the
-   build above is redundant here — keep it anyway, because the sibling
-   repos' do not and the habit is what travels.
+   **Removing the lockfile is not enough on its own.** It does not touch
+   `node_modules`, and the sibling symlinks that make local development work
+   (`ts/node_modules/@tabnas/…` pointing at a checkout) survive it — the
+   suite then passes against unreleased code while appearing to verify the
+   published one. Reinstalling is the part that matters.
+
+   `npm test` already compiles here — the `test` script itself begins with
+   `npm run build`. No separate build step is needed.
+
+   On the Go side, `GOWORK=off` is necessary and **not sufficient** — it
+   disables the workspace and nothing else. A `replace` carrying no version
+   on the left applies to every version, so the `require` still resolves to
+   the sibling directory. Assert its absence first:
+
+   ```bash
+   cd go
+   go mod edit -json | grep -q '"Replace": null' || { echo 'go.mod has a replace'; exit 1; }
+   GOWORK=off go test -count=1 ./...
+   ```
+
+   `-count=1` because shared fixtures live outside the Go module, so a
+   changed corpus does not invalidate the test cache.
 3. **Merge the bump through a reviewed PR.** That is the house convention —
    `CONTRIBUTING.md` squash-merges PRs and takes the title as the commit
    message — and what `release.yml`'s own header describes. A direct push to
@@ -269,57 +294,40 @@ The steps, in order:
 4. **Wait for `main` CI to go green on the bump commit.** The release
    workflow **has no test step** — it reads `main`, builds against
    already-published dependencies, publishes and tags. `ci.yml` on the bump
-   PR is the only gate there is. An npm version is immutable, and a Go
+   commit is the only gate there is. An npm version is immutable, and a Go
    module tag is worse: proxy.golang.org caches module versions permanently,
    so a `go/vX.Y.Z` naming the wrong commit cannot be moved, only
    superseded.
 5. Dispatch `release.yml` on `main` with `go: true`.
-6. Confirm `npm view @tabnas/support@$V version`, and **query both tags
-   exactly**:
+6. Confirm — and make the check **fail**, not merely print:
 
    ```bash
    V=x.y.z
-   git ls-remote --tags origin "refs/tags/ts/v$V" "refs/tags/go/v$V" | wc -l   # want 2
+   npm view @tabnas/support@$V version
+   n=$(git ls-remote --tags origin "refs/tags/ts/v$V" "refs/tags/go/v$V" | wc -l)
+   [ "$n" = 2 ] || { echo "incomplete release: $n/2 tags"; exit 1; }
    ```
 
-   `git ls-remote --tags origin | grep v$V` is not a check. `grep` exits 0
-   if *either* ref matches, so it reports success in precisely the
-   half-finished state — npm published and `ts/v` written, `go/v` not — that
-   the workflow is built to let you repair by re-dispatching.
+   Neither `… | grep v$V` nor a bare `wc -l` is a check: `grep` exits 0 when
+   *either* ref matches, and `wc` prints the count and exits 0 regardless.
+   Both report a half-finished release as a finished one.
+
+### When a dispatch dies half-way
 
 The workflow fails closed on a dispatch from any ref but `main`, and when
 every tag it would create already exists (the "you forgot to bump" signal).
 It fails *open* on an already-published npm version, so a run that published
-and then died before tagging is repairable by re-dispatching rather than
-stuck.
+and then died before tagging can be re-dispatched — **but only while `main`
+still points at the release commit.**
 
-### Verifying against the published module, not your checkout
-
-`GOWORK=off` is necessary and **not sufficient**. It disables the workspace
-and nothing else — it does *not* neutralise a `replace` in `go.mod`, because
-a replacement with no version on the left applies to every version. The
-`require` then still resolves to the sibling directory, and the suite goes
-green against the very checkout you were trying to stop using:
-
-```
-$ GOWORK=off go list -m github.com/tabnas/parser/go
-github.com/tabnas/parser/go v0.9.6 => /…/parser/go
-```
-
-Assert the absence first, and only then believe the run:
-
-```bash
-cd go
-go mod edit -json | grep -q '"Replace": null' || { echo 'go.mod still has a replace'; exit 1; }
-GOWORK=off go test ./...
-```
-
-The TypeScript equivalent is `ts/package-lock.json`: it is gitignored, it
-pins the previous versions, and `npm install` after a dependency bump will
-happily keep them — the suite then passes against the packages you were
-replacing. Delete it before verifying. Both of these produce a green local
-run against the wrong version, which is the only kind of green worth
-distrusting.
+That caveat is the sharp edge. The repair logic anchors new tags to an
+*existing* tag. If the run published to npm and died before the atomic push,
+neither tag exists to supply that anchor — so if `main` has moved on, the
+anchor falls back to the new `HEAD` while the publish step skips the version
+already on npm. Both tags then land on a commit that is not the one npm
+serves, and for the Go module that is permanent. In that state, recover the
+original SHA and tag it by hand, or bump to the next patch. Do not just
+re-dispatch.
 
 ### Never commit the local wiring
 
@@ -334,9 +342,12 @@ Testing against unreleased siblings means symlinked `node_modules`,
   leaves `missing go.sum entry` — a *different* error on the commit meant to
   fix the first one. Revert both, and diff them against the last release
   commit.
-- **A `go.work` belongs outside every repo**, one level up, `use`ing each
-  module, so no repo can track it. It also never consults `go.sum`, so it
-  cannot tell you whether a *declared* version is sound.
+- **A `go.work` belongs outside every repo**, one level up. Be precise about
+  what it does and does not check: it still consults the `go.sum` files of
+  its member modules and writes any missing sums to `go.work.sum`. What it
+  skips is validating the *declared version* of a module it replaces with a
+  local one — which is exactly the part that hides a bad dependency bump,
+  and why the `GOWORK=off` run above exists.
 - Scratch files — anything written to measure something.
 
 Stage deliberately (`git add <path>`) and read `git status --short` before
@@ -351,7 +362,7 @@ either:
 - `publish-ts` runs a local `npm publish`, which goes out over a token and
   bypasses the OIDC trusted publishing the workflow uses.
 - `publish-go V=x.y.z` is the sound one here — it refuses unless
-  `ts/package.json` already reads `V`, and it runs the Go suites *after* the
+  `ts/package.json` already reads `V`, and runs the Go suites *after* the
   bump rather than before. It still pushes a tag, which a session cannot do;
   that is the only reason it is not your path.
 
