@@ -247,9 +247,14 @@ accepts the publish. Pushing a tag by hand is the orchestrator's path
 
 The steps, in order:
 
-1. Bump all **four** version sites together — `ts/package.json`, `VERSION`
-   in `ts/src/support.ts`, `const VERSION` in `go/support.go` and
-   `ts/package-lock.json` (regenerated, not hand-edited). Drift is caught by
+1. Bump all **five** version sites together — `ts/package.json`, `VERSION`
+   in `ts/src/support.ts`, `const VERSION` in `go/support.go`,
+   `ts/package-lock.json` (regenerated, not hand-edited), and the
+   `github.com/tabnas/support/go` requirement in `go/adder/go.mod`.
+   That last one is easy to miss because `go/adder/` is a separate module:
+   it pins the version of this one, so leaving it behind fails
+   `TestVersionMatchesAdderRequire` in step 2, before you can merge.
+   `make version V=x.y.z` moves all of them. Drift is caught by
    `ts/test/version.test.js` and `go/version_test.go`.
 2. Verify against the **published** dependencies rather than your checkout.
    The release runner installs fresh from the registry; a working tree
@@ -303,14 +308,25 @@ The steps, in order:
 
    ```bash
    V=x.y.z
+   REL=$(git rev-parse origin/main)   # capture BEFORE dispatching
    npm view @tabnas/support@$V version
-   n=$(git ls-remote --tags origin "refs/tags/ts/v$V" "refs/tags/go/v$V" | wc -l)
-   [ "$n" = 2 ] || { echo "incomplete release: $n/2 tags"; exit 1; }
+   for T in "ts/v$V" "go/v$V"; do
+     S=$(git ls-remote origin "refs/tags/$T" | cut -f1)
+     [ -n "$S" ] || { echo "missing tag $T"; exit 1; }
+     [ "$S" = "$REL" ] || { echo "$T is $S, expected $REL"; exit 1; }
+   done
    ```
 
-   Neither `… | grep v$V` nor a bare `wc -l` is a check: `grep` exits 0 when
-   *either* ref matches, and `wc` prints the count and exits 0 regardless.
-   Both report a half-finished release as a finished one.
+   Counting the refs is not enough either. `grep v$V` exits 0 when *either*
+   ref matches; a bare `wc -l` prints the count and exits 0 regardless; and
+   even `[ "$n" = 2 ]` passes in the case this section warns about, because an
+   anchor fallback writes *both* tags on a commit npm never served — and two
+   wrong tags count as two. Comparing each tag against the commit you
+   released is what catches that.
+
+   The refs carry the commit directly: `release.yml` creates them with
+   `git tag "$T" "$ANCHOR"`, so they are lightweight and there is no `^{}`
+   to peel.
 
 ### When a dispatch dies half-way
 
