@@ -247,20 +247,36 @@ accepts the publish. Pushing a tag by hand is the orchestrator's path
 
 The steps, in order:
 
-1. Bump all **four** version sites together — `ts/package.json`, `VERSION`
-   in `ts/src/support.ts`, `const VERSION` in `go/support.go` and
-   `ts/package-lock.json` (regenerated, not hand-edited). Drift is caught by
-   `ts/test/version.test.js` and `go/version_test.go`.
+1. Bump all **five** version sites together — `ts/package.json`, `VERSION`
+   in `ts/src/support.ts`, `const VERSION` in `go/support.go`,
+   `ts/package-lock.json` (regenerated, not hand-edited), and the
+   `github.com/tabnas/support/go` requirement in `go/adder/go.mod`.
+   That last one is easy to miss because `go/adder/` is a separate module:
+   it pins the version of this one, so leaving it behind fails
+   `TestVersionMatchesAdderRequire` in step 2, before you can merge.
+   `make version V=x.y.z` moves all of them — the lockfile included, as a
+   side effect of the `npm version` it runs.
+
+   Drift is caught for **four** of the five, not all: `ts/test/version.test.js`
+   pins `ts/src/support.ts` to `ts/package.json`, and `go/version_test.go`
+   pins `go/support.go` and the `go/adder/go.mod` require to it. Nothing
+   asserts the lockfile's own version field — `ts/test/enginepin.test.js`
+   does read the lockfile, but only for the `@tabnas/parser` pin. So a bump
+   made by hand instead of by `make version` can leave `ts/package-lock.json`
+   behind with every test named here still green. Use `make version`; if you
+   edit by hand anyway, check the lockfile yourself.
 2. Verify against the **published** dependencies rather than your checkout.
    The release runner installs fresh from the registry; a working tree
    usually does not, so reproduce that before believing anything:
 
    ```bash
-   cd ts
-   # package-lock.json is TRACKED here — regenerate it, do not delete it
-   rm -rf node_modules
-   npm install
-   npm test
+   (
+     cd ts
+     # package-lock.json is TRACKED here — regenerate it, do not delete it
+     rm -rf node_modules
+     npm install
+     npm test
+   )
    ```
 
    **Removing the lockfile is not enough on its own.** It does not touch
@@ -278,13 +294,24 @@ The steps, in order:
    the sibling directory. Assert its absence first:
 
    ```bash
-   cd go
-   go mod edit -json | grep -q '"Replace": null' || { echo 'go.mod has a replace'; exit 1; }
-   GOWORK=off go test -count=1 ./...
+   (
+     cd go
+     go mod edit -json | grep -q '"Replace": null' || { echo 'go.mod has a replace'; exit 1; }
+     GOWORK=off go test -count=1 ./...
+     (cd adder && GOWORK=off go test -count=1 ./...)
+   )
    ```
 
    `-count=1` because shared fixtures live outside the Go module, so a
    changed corpus does not invalidate the test cache.
+
+   **`./...` from `go/` does not reach `go/adder`.** It is a separate module,
+   and `go test ./...` stops at the module boundary — verified: the run above
+   reports only `github.com/tabnas/support/go`. A change that breaks only the
+   adder passes this step unless you enter that directory, so the second line
+   is not redundant. `make test-go test-go-adder` runs both. Note `adder`'s
+   own `go.mod` carries `replace github.com/tabnas/support/go => ../` by
+   design, so the no-replace assertion above applies to `go/` only.
 3. **Merge the bump through a reviewed PR.** That is the house convention —
    `CONTRIBUTING.md` squash-merges PRs and takes the title as the commit
    message — and what `release.yml`'s own header describes. A direct push to
@@ -298,19 +325,67 @@ The steps, in order:
    module tag is worse: proxy.golang.org caches module versions permanently,
    so a `go/vX.Y.Z` naming the wrong commit cannot be moved, only
    superseded.
-5. Dispatch `release.yml` on `main` with `go: true`.
+5. **Record the release commit, then dispatch.** The confirmation
+   below compares each tag against the commit you released, and a run
+   that publishes and then fails to tag can be followed by `main`
+   moving — so capture it *before* the dispatch, and read it from the
+   remote rather than a local ref that may be stale:
+
+   ```bash
+   REL=$(git ls-remote origin refs/heads/main | cut -f1)
+   ```
+
+   Then dispatch `release.yml` on `main` with `go: true`.
+
+   Keep that SHA. If a later run has to repair this release, the comparison
+   must still be against the commit npm actually served — re-reading `main`
+   at repair time gives you whatever it has become, which is exactly the
+   value the faulty anchor would also produce, so the check would agree with
+   itself and pass. If you no longer have it, recover it from the original
+   run: the `head_sha` of that `release.yml` run is the commit it published.
 6. Confirm — and make the check **fail**, not merely print:
 
    ```bash
    V=x.y.z
    npm view @tabnas/support@$V version
-   n=$(git ls-remote --tags origin "refs/tags/ts/v$V" "refs/tags/go/v$V" | wc -l)
-   [ "$n" = 2 ] || { echo "incomplete release: $n/2 tags"; exit 1; }
+   npm view @tabnas/support@$V dist.attestations   # empty = unattested
+   for T in "ts/v$V" "go/v$V" "go/adder/v$V"; do
+     S=$(git ls-remote origin "refs/tags/$T" | cut -f1)
+     [ -n "$S" ] || { echo "missing tag $T"; exit 1; }
+     [ "$S" = "$REL" ] || { echo "$T is $S, expected $REL"; exit 1; }
+   done
    ```
 
-   Neither `… | grep v$V` nor a bare `wc -l` is a check: `grep` exits 0 when
-   *either* ref matches, and `wc` prints the count and exits 0 regardless.
-   Both report a half-finished release as a finished one.
+   **The dispatch does not create `go/adder/vX.Y.Z`.** `release.yml` writes
+   `ts/v$V` and `go/v$V` and nothing else — grep it for `adder` and you get
+   no hits. But this repo's own tag table says that third tag is required:
+   *"Without it the module is unresolvable, because Go finds a nested module
+   only under its own path prefix."* So a dispatch-only release publishes npm,
+   tags the main Go module, and leaves `github.com/tabnas/support/go/adder`
+   unresolvable at the new version. A session cannot push a tag (HTTP 403 on
+   tag refs), so this is the one step here that genuinely needs a maintainer:
+   `make publish-go V=x.y.z` pushes `go/v` and `go/adder/v` together. Hand
+   over explicitly, and do not call the release finished until all three
+   refs are present.
+
+   **Check `dist.attestations`, not just that the version exists.** The
+   workflow fails *open* on an already-published version, so a version that
+   reached npm by some other route satisfies `npm view … version` while
+   carrying no provenance — which is exactly how 0.1.1 shipped unattested,
+   as the Makefile records. An empty field means the artifact is not
+   attested, whatever the tags say.
+
+   Counting the refs is not enough either. `grep v$V` exits 0 when *either*
+   ref matches; a bare `wc -l` prints the count and exits 0 regardless; and
+   a bare count passes in the case this section warns about, because an
+   anchor fallback writes the tags on a commit npm never served — and wrong
+   tags count the same as right ones. Comparing each against the commit you
+   released is what catches that, and it also catches a `make publish-go`
+   run from a `main` that has since moved.
+
+   The refs carry the commit directly: both `release.yml` (`git tag "$T"
+   "$ANCHOR"`) and `make publish-go` create lightweight tags, so there is no
+   `^{}` to peel.
 
 ### When a dispatch dies half-way
 
