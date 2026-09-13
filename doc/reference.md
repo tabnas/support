@@ -2,7 +2,7 @@
 
 The fixture format, and the full API in both runtimes side by side. The
 two are written to behave identically; where a difference is unavoidable
-it is marked **Differs** and explained. There are six, and adding a
+it is marked **⚠ differs** and explained. There are six, and adding a
 seventh without documenting it silently breaks the guarantee the package
 exists to provide.
 
@@ -130,7 +130,7 @@ handed the code with the suffix already stripped.
 
 An empty `expected` cell means "no value".
 
-> **Differs.** TypeScript reads an empty cell as `undefined` and `null`
+> **⚠ differs.** TypeScript reads an empty cell as `undefined` and `null`
 > as `null`; Go has no `undefined`, so both are `nil`. In a cross-runtime
 > fixture, write `null` explicitly rather than leaving the cell empty.
 
@@ -200,7 +200,7 @@ invented here:
 | `resolve(sel)` | (none) | Resolve a position **or** a name to a position; throws on an unknown name. |
 | `where()` | `Where()` | `<file>:<line>`, for a failure message. |
 
-> **Differs.** TypeScript's `resolve` takes `number | string`, which Go
+> **⚠ differs.** TypeScript's `resolve` takes `number | string`, which Go
 > has no equivalent for; a Go caller uses `Col` or `Named` directly, and
 > `Runner` takes the position and the name as separate fields.
 
@@ -248,7 +248,7 @@ moves a directory, and that is spelt differently in `go/` anyway. An empty
 directory, which is the package directory under `go test` and the `ts/`
 directory under `npm test`.
 
-> **Differs.** TypeScript throws; Go returns an `error`. Each is its
+> **⚠ differs.** TypeScript throws; Go returns an `error`. Each is its
 > language's convention, and every message carries the same text.
 
 ## Expectation API
@@ -457,7 +457,7 @@ take part in the parse: an `opts` column of plugin options is the common
 one, and a runner that could not see it would leave every such repo
 writing its own loop again.
 
-> **Differs.** TypeScript's `parse` simply takes the row as a second
+> **⚠ differs.** TypeScript's `parse` simply takes the row as a second
 > argument, which a caller who does not want it leaves off. Go has no
 > optional parameter, so the row-taking form is the separate field
 > `ParseRow`; folding the row into `Parse` would make every simple suite
@@ -514,7 +514,7 @@ so a guard that only ever failed a test could not itself be pinned. It
 also rejects a misspelt column name at registration time, rather than as
 one red case per row. `spec` / `Spec` calls it first.
 
-> **Differs.** TypeScript's checks throw; Go's return an `error`. Same
+> **⚠ differs.** TypeScript's checks throw; Go's return an `error`. Same
 > split as `row` / `CheckRow`, and each is its language's convention.
 
 ## Census API
@@ -616,6 +616,6 @@ every tabnas repo, so it carries none of its own; the grammar that
 exercises it needs the parser, and splitting them is what lets both facts
 hold.
 
-> **Differs.** TypeScript has one number type; Go's `#NR` token value is
+> **⚠ differs.** TypeScript has one number type; Go's `#NR` token value is
 > widened to `float64` by an unexported helper, so the total is one type
 > throughout.
