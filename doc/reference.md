@@ -398,7 +398,7 @@ divergent.tsv:12: this divergence is CLOSED. go now produces what the ts
 column records ("A"), not its own ("a").
   This is the register working: a fixed divergence fails as loudly as a
   regressed one, so the row cannot outlive it.
-  DELETE this row. Do not edit it to match: that would record a divergence
+  DELETE this row. Do not edit it to match — that would record a divergence
   that no longer exists, which is what this mechanism exists to prevent.
 ```
 
