@@ -20,9 +20,9 @@ on:
   push:
     paths:
       - 'doc/**'
-      - 'go/**'
-      - 'ts/**'
       - 'README.md'
+      - 'go/README.md'
+      - 'ts/README.md'
       - 'docs/STYLE-GUIDE.md'
       - 'ts/scripts/gated-docs.cjs'
       - '.vale.ini'
@@ -31,9 +31,9 @@ on:
   pull_request:
     paths:
       - 'doc/**'
-      - 'go/**'
-      - 'ts/**'
       - 'README.md'
+      - 'go/README.md'
+      - 'ts/README.md'
       - 'docs/STYLE-GUIDE.md'
       - 'ts/scripts/gated-docs.cjs'
       - '.vale.ini'
