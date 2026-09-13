@@ -2,7 +2,7 @@
 
 The fixture format, and the full API in both runtimes side by side. The
 two are written to behave identically; where a difference is unavoidable
-it is marked **⚠ differs** and explained. There are six, and adding a
+it is marked **Differs** and explained. There are six, and adding a
 seventh without documenting it silently breaks the guarantee the package
 exists to provide.
 
@@ -30,7 +30,7 @@ a,	["a"]
 | Line 1 | **Header**, naming the columns. A row can then be read by name rather than by position. |
 | Blank | Skipped. |
 | `#` with no tab | **Comment**, skipped. |
-| `#` **with** a tab | **Data.** A data row always has at least one tab, so a fixture whose input is a C preprocessor directive — or a comment in the parsed language — still works. |
+| `#` **with** a tab | **Data.** A data row always has at least one tab, so a fixture whose input is a C preprocessor directive, or a comment in the parsed language, still works. |
 | Anything else | Data. |
 
 Columns are returned **raw**. Escape decoding is per column and explicit,
@@ -42,7 +42,7 @@ would put a real newline inside the quotes, which is not valid JSON.
 Line numbers reported are the **physical 1-based line** in the file, so a
 failure message points an editor straight at the row.
 
-A leading UTF-8 BOM is stripped — otherwise it becomes part of the first
+A leading UTF-8 BOM is stripped; otherwise it becomes part of the first
 column's name and every lookup by that name fails for no visible reason.
 CRLF and LF line endings mean the same thing.
 
@@ -57,10 +57,10 @@ row separator). Fixtures write those as escapes:
 | `\r` | carriage return |
 | `\t` | tab |
 | `\\` | backslash |
-| anything else | **itself, unchanged** — `\q` stays `\q` |
+| anything else | **itself, unchanged.** `\q` stays `\q` |
 
 Passing an unrecognised escape through is what lets a fixture carry its own
-backslashes — a regex, a Windows path, a JSON string escape — without a
+backslashes (a regex, a Windows path, a JSON string escape) without a
 second layer of quoting. Decoding is left to right, so `\\n` is an escaped
 backslash followed by the letter `n`, not a newline.
 
@@ -81,7 +81,7 @@ ERROR:@1:8            -- must fail at row 1 column 8, code unchecked
 The cell counts as an error expectation only when it is exactly `ERROR` or
 starts with `ERROR:`. A bare `startsWith('ERROR')` test would read a
 legitimate `ERRORS` expected value as a failure expectation and then never
-compare the parse result at all — a row that silently tests nothing.
+compare the parse result at all, a row that silently tests nothing.
 
 The **code** is part of the contract. Two runtimes that reject the same
 input for different reasons have not agreed on anything.
@@ -92,7 +92,7 @@ A trailing `@<row>:<col>` pins where the error is reported, 1-based, and
 is checked in addition to the code.
 
 A code alone does not pin a diagnostic. Two runtimes can agree on
-`unexpected` and disagree entirely on where they say it happened — which
+`unexpected` and disagree entirely on where they say it happened, which
 is what the 2026-08 fleet audit found, in several repos at once, with
 every code row green. A fixture that pins the position turns that
 disagreement into a failing row instead of a difference nobody is looking
@@ -103,7 +103,7 @@ before and its position is not checked, so adding this turned no existing
 row red.
 
 `@` rather than another colon because a code is not always a bare
-identifier — the fleet's fixtures carry `ERROR:a:b` and whole diagnostic
+identifier: the fleet's fixtures carry `ERROR:a:b` and whole diagnostic
 sentences with embedded colons, so `ERROR:x:1:8` could not be split
 without guessing. The suffix is anchored at the end and digits-only, so a
 code that merely contains an `@` (`ERROR:user@example.com`) keeps it.
@@ -111,7 +111,7 @@ code that merely contains an `@` (`ERROR:user@example.com`) keeps it.
 Positions are **1-based**, and `@0:0` is rejected as a malformed fixture
 rather than read. An error type that leaves its `row`/`col` at zero when it
 has no position would otherwise *match* `@0:0`, and the row would pass
-while pinning no source location at all — this channel's own silent gap,
+while pinning no source location at all, this channel's own silent gap,
 reintroduced through its own syntax.
 
 An error that reports **no** position fails a row that pins one. The point
@@ -130,7 +130,7 @@ handed the code with the suffix already stripped.
 
 An empty `expected` cell means "no value".
 
-> **⚠ differs.** TypeScript reads an empty cell as `undefined` and `null`
+> **Differs.** TypeScript reads an empty cell as `undefined` and `null`
 > as `null`; Go has no `undefined`, so both are `nil`. In a cross-runtime
 > fixture, write `null` explicitly rather than leaving the cell empty.
 
@@ -142,7 +142,7 @@ invented here:
 - **Beyond float64 range reads as ±Infinity.** `1e400` is `Infinity`,
   which is what `JSON.parse` answers. Go's `encoding/json` rejects the
   literal outright, so `ParseExpect` re-reads such a cell keeping the
-  number as text and widens it with `strconv` — otherwise a fixture row
+  number as text and widens it with `strconv`; otherwise a fixture row
   would run in TypeScript and fail to *load* in Go. `Infinity` compares
   equal to itself, so an overflow row can be pinned.
 - **Integers beyond 2^53 are not exact, in either runtime.**
@@ -197,17 +197,17 @@ invented here:
 | `named(name)` | `Named(name)` | Raw column by header name; `''` if absent. |
 | `unescNamed(name)` | `UnescNamed(name)` | Escape-decoded column by header name. |
 | `index_of(name)` | `IndexOf(name)` | Position of a header name, or `-1`. |
-| `resolve(sel)` | — | Resolve a position **or** a name to a position; throws on an unknown name. |
+| `resolve(sel)` | (none) | Resolve a position **or** a name to a position; throws on an unknown name. |
 | `where()` | `Where()` | `<file>:<line>`, for a failure message. |
 
-> **⚠ differs.** TypeScript's `resolve` takes `number | string`, which Go
+> **Differs.** TypeScript's `resolve` takes `number | string`, which Go
 > has no equivalent for; a Go caller uses `Col` or `Named` directly, and
 > `Runner` takes the position and the name as separate fields.
 
 Reading a column out of range gives `''` rather than an error: a fixture
 with a trailing optional column should not need a length check at every
 use. Reading an **unknown header name** through `resolve` / `Runner`
-*is* an error — that is a defect in the caller, not a missing value, and
+*is* an error: that is a defect in the caller, not a missing value, and
 silently reading column `-1` would compare the input against itself.
 
 ### Options
@@ -218,7 +218,7 @@ silently reading column `-1` would compare the input against itself.
 | `comment?: boolean` | `Comment *bool` | true | Skip `#`-leading lines with no tab. |
 | `minCols?: number` | `MinCols int` | 1 | Reject a data row with fewer columns. |
 
-Go uses pointers so "false" is distinguishable from "not set" — the same
+Go uses pointers so "false" is distinguishable from "not set", the same
 convention the parser's option structs use. `Bool(false)` builds one.
 
 ### Functions
@@ -242,13 +242,13 @@ directory reports green having run nothing.
 
 `findSpecDir` walks up from `from` until it finds a `test/spec` directory.
 This replaces the `join(__dirname, '..', '..', 'test', 'spec')` that every
-repo hard-codes — a relative hop that has to be recounted whenever a test
+repo hard-codes, a relative hop that has to be recounted whenever a test
 moves a directory, and that is spelt differently in `go/` anyway. An empty
 `from` (Go) or an omitted one (TypeScript) starts at the working
 directory, which is the package directory under `go test` and the `ts/`
 directory under `npm test`.
 
-> **⚠ differs.** TypeScript throws; Go returns an `error`. Each is its
+> **Differs.** TypeScript throws; Go returns an `error`. Each is its
 > language's convention, and every message carries the same text.
 
 ## Expectation API
@@ -260,7 +260,7 @@ directory under `npm test`.
 | `errorCode(expected): string` | `ErrorCode(expected string) (string, error)` |
 | `parseExpect(expected): unknown` | `ParseExpect(expected string) (any, error)` |
 | `equalValue(got, expected, options?)` | `EqualValue(got, expected any) bool` |
-| — | `EqualValueWith(got, expected any, normalize func(any) any) bool` |
+| (none) | `EqualValueWith(got, expected any, normalize func(any) any) bool` |
 | `formatValue(val): string` | `FormatValue(val any) string` |
 | `loneSurrogateAt(cell): number` | `LoneSurrogateAt(cell string) int` |
 | `loneSurrogateMessage(cell, at): string` | `LoneSurrogateMessage(cell string, at int) string` |
@@ -268,13 +268,13 @@ directory under `npm test`.
 ### A shared expected cell cannot hold a lone surrogate
 
 The runner **refuses** a value cell containing an unpaired `\uXXXX`
-surrogate escape, naming the row — **on the default path only**. A suite
+surrogate escape, naming the row, **on the default path only**. A suite
 supplying `parseExpected` / `ParseExpected` has a wider vocabulary than
 JSON, which need not read `\uXXXX` as an escape at all, so the check
 stands aside; call `loneSurrogateAt` from the hook if the syntax does use
 JSON escapes.
 
-The position is reported in **code points of the raw cell text** — the
+The position is reported in **code points of the raw cell text**, the
 one unit the two ports agree on without conversion, since the natural
 index is a UTF-16 offset in TypeScript and a byte offset in Go. Counted
 over the raw text, so a written-out surrogate pair spells twelve
@@ -289,14 +289,14 @@ string is UTF-8 and cannot. Measured on the same cells:
 |---|---|---|
 | `"\ud800"` | 1 unit, `d800` | 3 bytes, `ef bf bd` |
 | `"a\ud800b"` | `61 d800 62` | `61 ef bf bd 62` |
-| `"\ud83d\ude00"` | `d83d de00` | `f0 9f 98 80` — **agree** |
+| `"\ud83d\ude00"` | `d83d de00` | `f0 9f 98 80`, **agree** |
 
 So a shared cell holding one asks the two runtimes different questions
 and **both pass**. It is the one thing a shared expected column cannot
 express, and it fails silently, which is why this is an error rather than
 something to notice later.
 
-A surrogate **pair** is fine — both runtimes decode it to the same
+A surrogate **pair** is fine: both runtimes decode it to the same
 character. An `ERROR:` cell is unaffected: it carries no JSON.
 
 Where the case *does* belong: a **per-runtime register column**, where
@@ -312,8 +312,8 @@ encoding, so it cannot appear literally in one.
 
 - Structural, and key-order independent. **Map key order is not part of
   the parsed-value contract** (ADR-15). TypeScript cannot preserve
-  integer-like key order in a plain object — that is ECMAScript's own
-  property-ordering rule, not a porting choice — so a fixture must not
+  integer-like key order in a plain object (that is ECMAScript's own
+  property-ordering rule, not a porting choice), so a fixture must not
   depend on it, and a difference in it between two ports is a recorded
   difference rather than a defect.
 - `-0` does **not** equal `0` (ADR-15). Signed zero is representable and
@@ -324,17 +324,17 @@ encoding, so it cannot appear literally in one.
   `formatValue` spells `-0` as `-0` **at every depth**, because
   `JSON.stringify` renders it `0` and a nested mismatch would otherwise
   report "got [0], expected [0]". Go's `json.Marshal` already writes `-0`,
-  so only the TypeScript formatter needed the work — and without it the two
+  so only the TypeScript formatter needed the work; without it the two
   runtimes would disagree about their own diagnostics.
 - **Go only:** a *defined* numeric type (`type Number float64` in a
   grammar's own package) is compared as the number it is, by kind rather
   than by exact type. Without that it fell through to `reflect.DeepEqual`,
-  where `Number(1)` did not equal `1.0` — so every numeric row failed for
-  such a grammar — and `Number(-0)` equalled `Number(0)`, so the signed-zero
+  where `Number(1)` did not equal `1.0` (so every numeric row failed for
+  such a grammar), and `Number(-0)` equalled `Number(0)`, so the signed-zero
   contract was not enforced for it. Same choice the map comparison makes for
   a defined string key type.
 - `NaN` equals itself, which `===` and `==` do not. A fixture cannot
-  express `NaN` — JSON has none — but a grammar can produce one.
+  express `NaN` (JSON has none), but a grammar can produce one.
 - **Go only:** an integer equals the float of the same magnitude, and any
   slice or string-keyed map compares by contents. The expected side always
   arrives from `encoding/json` as `float64`, while a grammar's result can
@@ -343,16 +343,16 @@ encoding, so it cannot appear literally in one.
   (`map[TokenName]any`) compares against a `map[string]any` expectation;
   a `map[int]any` does not, however happily Go would convert the key.
 - A number is never a string, and a container of one kind is never a
-  container of another — empty or not.
+  container of another, empty or not.
 - **Own keys only.** An object's inherited properties take no part: a
   result keyed `constructor` or `valueOf` is compared as the ordinary key
   it is, not matched against every object that inherits one. Relaxed
-  grammars parse those keys perfectly happily — that is what the
+  grammars parse those keys perfectly happily; that is what the
   `funky-keys` fixtures are for.
 
 The `normalize` hook rewrites every node on both sides, outermost first.
-This is where a runtime-specific container — an insertion-ordered map, a
-reference wrapper — is unwrapped into the plain value the fixture's JSON
+This is where a runtime-specific container (an insertion-ordered map, a
+reference wrapper) is unwrapped into the plain value the fixture's JSON
 describes.
 
 
@@ -375,8 +375,8 @@ support.Register{
 ```
 
 The fixture has an `input` column and **one column per runtime**, each
-written in the ordinary expected vocabulary — a JSON value, or
-`ERROR:<code>`:
+written in the ordinary expected vocabulary (a JSON value, or
+`ERROR:<code>`):
 
 ```
 input	ts	go
@@ -385,7 +385,7 @@ input	ts	go
 
 Both suites run the same file and read different columns of it.
 
-### Why this is not just a fixture
+### Why this is more than a fixture
 
 A fixture fails when behaviour **regresses**. A register also fails when the
 divergence is **fixed**.
@@ -398,7 +398,7 @@ divergent.tsv:12: this divergence is CLOSED. go now produces what the ts
 column records ("A"), not its own ("a").
   This is the register working: a fixed divergence fails as loudly as a
   regressed one, so the row cannot outlive it.
-  DELETE this row. Do not edit it to match — that would record a divergence
+  DELETE this row. Do not edit it to match: that would record a divergence
   that no longer exists, which is what this mechanism exists to prevent.
 ```
 
@@ -415,7 +415,7 @@ fix leaves it passing while it describes something that no longer happens.
 ### Rules the register enforces
 
 - **A row must record a disagreement.** If every runtime column says the
-  same thing, the row asserts nothing and would pass forever — the shape of
+  same thing, the row asserts nothing and would pass forever, the shape of
   the claims this replaces. It fails.
 - **Runtimes are named, not inferred** from the header, so a `note` or
   `issue` column is not silently read as a runtime that "agrees" with a
@@ -437,7 +437,7 @@ TypeScript builds a runner with `makeRunner(options)` (or
 | TypeScript | Go | Meaning |
 |---|---|---|
 | `parse` | `Parse` | Parse one input. **Required.** TS throws on rejection; Go returns an `error`. |
-| `parse` (2nd arg) | `ParseRow` | Parse one input, given the row as well. |
+| `parse` (second argument) | `ParseRow` | Parse one input, given the row as well. |
 | `errorCode` | `ErrorCode` | Extract the code from a failure. Optional. |
 | `matchError` | `MatchError` | Decide whether a failure satisfies `ERROR:<want>`, when a code cannot. Optional. |
 | `errorPos` | `ErrorPos` | Read the 1-based position a failure reports, for `ERROR:<code>@<row>:<col>` rows. Optional. |
@@ -453,26 +453,26 @@ Go's `Input` and `Expected` are `*int` because 0 is a real column: a plain
 to guess wrong is the default. `Int(0)` builds one.
 
 The row is handed to the parse hook because a fixture's other columns can
-take part in the parse — an `opts` column of plugin options is the common
+take part in the parse: an `opts` column of plugin options is the common
 one, and a runner that could not see it would leave every such repo
 writing its own loop again.
 
-> **⚠ differs.** TypeScript's `parse` simply takes the row as a second
+> **Differs.** TypeScript's `parse` simply takes the row as a second
 > argument, which a caller who does not want it leaves off. Go has no
 > optional parameter, so the row-taking form is the separate field
-> `ParseRow`; folding the row into `Parse` would make every simple suite —
-> the majority — write an ignored `_ *Row` and give up passing a parser's
+> `ParseRow`; folding the row into `Parse` would make every simple suite
+> (the majority) write an ignored `_ *Row` and give up passing a parser's
 > own method as the hook. Set one or the other: setting both is an error,
 > not a precedence rule, because the two say different things about the
-> same row and running one quietly would hide that the other never ran.
+> same row and running one silently would hide that the other never ran.
 
 The default `errorCode` reads `err.code` in TypeScript, and in Go reads a
-`Code() string` method or a `Code` string field — which is what
+`Code() string` method or a `Code` string field, which is what
 `*tabnas.TabnasError` carries, read by shape so this module needs no
 dependency on the parser.
 
-`matchError` is the escape hatch for a grammar with no stable code to pin
-— one whose failures are distinguished only by their message, or a fixture
+`matchError` is the escape hatch for a grammar with no stable code to pin:
+one whose failures are distinguished only by their message, or a fixture
 that names a position (`ERROR:1:8`) rather than a kind. It is handed the
 error, the wanted text and the row, and it **replaces** the code
 comparison, so `errorCode` is not consulted by a runner that sets it. A
@@ -486,13 +486,13 @@ to be reworded. The hook exists so such a fixture can keep asserting
 asserts only that it failed.
 
 `parseExpected` widens the expected cell's vocabulary. JSON is what the
-cell should be wherever it can be — it is the one notation both runtimes
-already agree on — but some grammars produce values JSON cannot spell:
+cell should be wherever it can be (it is the one notation both runtimes
+already agree on), but some grammars produce values JSON cannot spell:
 JSON5's `NaN` and `Infinity`, and the `UNDEFINED` several repos use for
 "the parse yielded no value at all", which is a *different result* from
 `null`. Without the hook those fixtures could not pin the distinction they
 exist to pin. It replaces `parseExpect`, so call `parseExpect` for the
-cells the hook does not claim, and it is reached only for a value row —
+cells the hook does not claim, and it is reached only for a value row:
 an `ERROR` cell is an error expectation before it is anything else.
 
 | TypeScript | Go | Runs |
@@ -501,8 +501,8 @@ an `ERROR` cell is an error expectation before it is anything else.
 | `runner.file(path)` | `Runner.File(t, path)` | One fixture file. |
 | `runner.spec(spec)` | `Runner.Spec(t, spec)` | An already-loaded fixture. |
 | `runner.row(row, input, expected)` | `Runner.Row(t, row, input, expected)` | One row. |
-| `runner.checkSpec(spec)` | `Runner.CheckSpec(spec) error` | Nothing — reports whether a fixture *can* be run. |
-| — | `Runner.CheckRow(row, input, expected) error` | One row, returning the failure instead of reporting it. |
+| `runner.checkSpec(spec)` | `Runner.CheckSpec(spec) error` | Nothing. Reports whether a fixture *can* be run. |
+| (none) | `Runner.CheckRow(row, input, expected) error` | One row, returning the failure instead of reporting it. |
 
 An empty fixture and an empty directory both **fail**. A fixture that
 loads but holds nothing is a silent pass, and a silent pass is
@@ -514,13 +514,13 @@ so a guard that only ever failed a test could not itself be pinned. It
 also rejects a misspelt column name at registration time, rather than as
 one red case per row. `spec` / `Spec` calls it first.
 
-> **⚠ differs.** TypeScript's checks throw; Go's return an `error`. Same
+> **Differs.** TypeScript's checks throw; Go's return an `error`. Same
 > split as `row` / `CheckRow`, and each is its language's convention.
 
 ## Census API
 
 Coverage and parity tripwires over error codes, for a consuming repo to
-run against its own data. Every input arrives as an argument — this
+run against its own data. Every input arrives as an argument: this
 package fetches no catalogue and imports no engine, because it depends
 on nothing and never will.
 
@@ -535,20 +535,20 @@ on nothing and never will.
 codes") and returns the codes its expectation cells exercise: sorted,
 unique. A `@<row>:<col>` position suffix is stripped first, so a fixture
 that pins a position stays inside the census. Only a **code-style** cell
-counts — `ERROR:` followed by a bare
+counts: `ERROR:` followed by a bare
 `[a-z][a-z0-9_]*` token. A message-style expectation (`ERROR:bad token`,
 `ERROR:1:8`) and a bare `ERROR` assert a rejection without naming a
 code, and returning them would count coverage that is not there.
 
 The expectation column defaults to each **row's last column**; select it
 with `col` / `Col` (position) or `name` / `Name` (header name, which
-wins when set). An unknown name is an error — the same caller defect
+wins when set). An unknown name is an error, the same caller defect
 `resolve` and the runner report. Go's `Col` is a `*int` for the same
 reason `Runner.Input` is: 0 is a real column, and a plain `int` could
 not tell it from "not set". `Int(0)` builds one.
 
-`compareCatalogues` diffs two `{code: template}` maps — message
-catalogues, hint catalogues, or one runtime's against the other's:
+`compareCatalogues` diffs two `{code: template}` maps (message
+catalogues, hint catalogues, or one runtime's against the other's):
 
 | TypeScript | Go | Meaning |
 |---|---|---|
@@ -561,7 +561,7 @@ have still drifted, and the byte diff is what a maintainer has to
 reconcile.
 
 `coverage` compares the codes a package declares against the codes its
-fixtures exercise (typically `codesInSpecDir`'s answer — whether
+fixtures exercise (typically `codesInSpecDir`'s answer; whether
 inherited base codes count as declared is the caller's choice):
 
 | TypeScript | Go | Meaning |
@@ -575,7 +575,7 @@ when there is nothing to report, so the two runtimes render the same
 answer the same way. Code point is deliberate: Go's `sort.Strings`
 compares UTF-8 bytes, which for valid UTF-8 *is* code-point order, while
 TypeScript's default sort compares UTF-16 code units and would order a
-non-BMP catalogue key differently — so the TypeScript census supplies
+non-BMP catalogue key differently, so the TypeScript census supplies
 its own comparator instead.
 
 ## The adder grammar
@@ -590,7 +590,7 @@ add = NR [ PL add ]  -- each number adds to it; `+` repeats
 
 | TypeScript | Go |
 |---|---|
-| `require('@tabnas/support/adder').adder` | `github.com/tabnas/support/go/adder` — `adder.Adder`, `adder.Make()` |
+| `require('@tabnas/support/adder').adder` | `github.com/tabnas/support/go/adder`: `adder.Adder`, `adder.Make()` |
 
 ```js
 const { Tabnas } = require('@tabnas/parser')
@@ -607,7 +607,7 @@ tn.Parse("1+2+3")   // => 6
 
 `val` opens by pushing `add` with the total at 0. `add` opens on a number
 and adds it to its parent's node, then closes on `+` by **replacing**
-itself with another `add` — a repeat at the same stack depth, so `1+2+...`
+itself with another `add`, a repeat at the same stack depth, so `1+2+...`
 of any length runs in one frame and every iteration's parent is still
 `val`, where the total lands.
 
@@ -616,6 +616,6 @@ every tabnas repo, so it carries none of its own; the grammar that
 exercises it needs the parser, and splitting them is what lets both facts
 hold.
 
-> **⚠ differs.** TypeScript has one number type; Go's `#NR` token value is
+> **Differs.** TypeScript has one number type; Go's `#NR` token value is
 > widened to `float64` by an unexported helper, so the total is one type
 > throughout.

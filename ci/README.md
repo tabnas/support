@@ -2,8 +2,22 @@
 
 Staging area for GitHub Actions workflow changes.
 
-**Currently empty — nothing is pending.** Both staged workflows have been
-promoted and now live in `.github/workflows/`:
+## Pending
+
+- **`workflows/docs.yml`** — the prose gate: Vale over the reader-facing
+  pages at the levels set in `.vale.ini`, on the file list
+  `ts/scripts/gated-docs.cjs` produces. See `docs/STYLE-GUIDE.md`.
+
+  It needs no sibling checkouts and no secrets, and pins its own Vale
+  version. Errors fail the job; warnings go to the run summary as a
+  report. `make prose` runs the identical check locally, and the other
+  half of the gate (`ts/test/docs.test.js`) already runs in `make test`,
+  so promoting this adds the spelling and Google-convention arm rather
+  than the whole gate.
+
+## Promoted
+
+Both earlier staged workflows now live in `.github/workflows/`:
 
 - **`ci.yml`** — the org-standard thin caller delegating to
   `tabnas/.github/.github/workflows/polyglot-ci.yml@main` with
