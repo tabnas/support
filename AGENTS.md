@@ -403,13 +403,15 @@ The steps, in order:
    tag that is not `$GH` is wrong, and the two are not equally
    recoverable. A wrong `ts/v$V` simply moves: npm resolves from the
    registry, so the tag is a signpost and nothing reads it. A wrong
-   `go/v$V` does not. `proxy.golang.org` caches a module version's content
+   `go/v$V` or `go/adder/v$V` does not — they are two modules, and each is
+   spent on its own. `proxy.golang.org` caches a module version's content
    immutably, so once anything has fetched `v$V` that content is what
    consumers get for good, and a corrected tag only makes Git and the
    proxy disagree — and you cannot find out whether it has been fetched
    without causing it, because asking the proxy is itself a fetch. Leave
    that tag where it is and release the next patch from the right commit,
-   carrying `retract v$V` in its `go/go.mod`: the cached content stays,
+   carrying `retract v$V` in the affected module's `go.mod` — `go/go.mod`,
+   `go/adder/go.mod`, or both: the cached content stays,
    but `go get` stops selecting the bad version and reports it as
    retracted.
 
