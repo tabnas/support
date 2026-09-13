@@ -7,15 +7,15 @@ parser system: the TSV spec-fixture loader, the escape codec, the
 expectation helpers and the cross-runtime test runner.
 
 This is the Go half. The canonical TypeScript half is
-[`@tabnas/support`](../ts/), and the two are written to behave identically
-— same escape codec, same comment and blank-line handling, same
+[`@tabnas/support`](../ts/), and the two are written to behave identically:
+same escape codec, same comment and blank-line handling, same
 `ERROR:<code>` contract, same value comparison. That is the point: every
 tabnas package proves its two runtimes agree by running **one** set of TSV
 fixtures in **both**, and a loader that disagreed with its twin would make
 those fixtures prove nothing.
 
 **This module has no dependencies, and never will.** Every tabnas repo
-depends on it, so anything it required would land in all of them —
+depends on it, so anything it required would land in all of them,
 including the parser it is used to test. The adder grammar that exercises
 it end to end therefore lives in the separate [`adder`](adder/) module.
 
@@ -31,7 +31,7 @@ Go has no `devDependencies`. The equivalent guarantee comes from the
 **import graph**, not from metadata in `go.mod`:
 
 - **Import it only from `_test.go` files.** A package reached only from
-  test files is never linked into `go build` output — nothing from this
+  test files is never linked into `go build` output: nothing from this
   module, and nothing it pulls in (it imports `testing`), reaches a
   production binary.
 - **It stays out of your consumers' build lists too.** Since Go 1.17,
@@ -52,7 +52,7 @@ go list -deps ./... | grep -x 'github.com/tabnas/support/go' && \
 
 Worth a CI step in every consuming repo: the day someone imports the
 loader from `src`-side code to save a few lines, that line turns red
-instead of quietly shipping `testing` inside a release binary.
+instead of silently shipping `testing` inside a release binary.
 
 ## Use
 
@@ -77,11 +77,11 @@ func TestSpec(t *testing.T) {
 }
 ```
 
-`FindSpecDir("")` walks up from the working directory — the package
-directory under `go test` — until it finds a `test/spec` directory, so a
+`FindSpecDir("")` walks up from the working directory (the package
+directory under `go test`) until it finds a `test/spec` directory, so a
 suite does not hard-code how many levels up the fixtures are. `Dir` loads
 every `.tsv` there and runs one subtest per row, reporting with the
-fixture's own file name and line number.
+fixture's own filename and line number.
 
 One fixture file, rather than a directory:
 

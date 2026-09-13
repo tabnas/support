@@ -6,7 +6,7 @@ expectation helpers and the cross-runtime test runner.
 
 This is the TypeScript half. The Go half is
 [`github.com/tabnas/support/go`](../go/), and the two are written to behave
-identically — same escape codec, same comment and blank-line handling, same
+identically: same escape codec, same comment and blank-line handling, same
 `ERROR:<code>` contract, same value comparison. That is the point: every
 tabnas package proves its two runtimes agree by running **one** set of TSV
 fixtures in **both**, and a loader that disagreed with its twin would make
@@ -18,11 +18,11 @@ those fixtures prove nothing.
 npm install --save-dev @tabnas/support
 ```
 
-**A devDependency, always** — and, just as importantly, imported only from
+**A devDependency, always**, and just as importantly, imported only from
 `test/`. `--save-dev` keeps it out of a consumer's install; importing it
 only from test files keeps it out of the published `dist/`. The Go half
 has the same rule for the same reason, enforced by the import graph rather
-than by metadata — see [`go/README.md`](../go/README.md#keeping-it-out-of-your-build).
+than by metadata. See [`go/README.md`](../go/README.md#keeping-it-out-of-your-build).
 
 `@tabnas/parser` is an optional peer dependency, needed only for the
 [adder grammar](#the-adder-grammar).
@@ -43,7 +43,7 @@ makeRunner({ parse: (src) => tn.parse(src) })
 `findSpecDir` walks up until it finds a `test/spec` directory, so a suite
 does not hard-code how many levels up the fixtures are. The runner loads
 every `.tsv` in the named directory and emits one `node:test` case per row,
-reporting with the fixture's own file name and line number.
+reporting with the fixture's own filename and line number.
 
 One fixture file, rather than a directory:
 
@@ -80,8 +80,8 @@ tn.parse('10+20')   // => 30
 ```
 
 The integer-addition grammar from the `@tabnas/parser` README, packaged as
-a plugin. It is the smallest grammar that is still a real one — two rules,
-one custom token, a push and a repeat — which makes it this package's
+a plugin. It is the smallest grammar that is still a real one (two rules,
+one custom token, a push and a repeat), which makes it this package's
 end-to-end check: `test/adder.test.js` and `go/adder/adder_test.go` run it
 against the same `test/spec/adder/*.tsv` rows in both runtimes.
 
