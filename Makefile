@@ -7,7 +7,8 @@
 
 .PHONY: all build test clean build-ts build-go test-ts test-go test-go-adder \
         clean-ts clean-go publish-ts publish-go tag-ts tags-go reset fmt-go vet \
-        version
+        version \
+        prose prose-counts
 
 all: build test
 
