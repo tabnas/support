@@ -17,6 +17,7 @@ is the machinery that reads those fixtures.
 |---|---|
 | TypeScript | `@tabnas/support` in [`ts/`](ts/) |
 | Go | `github.com/tabnas/support/go` in [`go/`](go/) |
+| Rust | `tabnas-support` in [`rs/`](rs/) (unpublished; a sibling-checkout path dependency) |
 
 ## Why
 
@@ -47,7 +48,7 @@ themselves, the same way the parsers' fixtures test the parsers.
 
 ## What's in it
 
-Both runtimes expose the same four things:
+All three runtimes expose the same things:
 
 - **The escape codec.** `\n`, `\r`, `\t` and `\\` decoded; every other
   backslash sequence passed through untouched, so a fixture can carry its
@@ -60,7 +61,8 @@ Both runtimes expose the same four things:
   `-0` NOT equal to `0`, `NaN` equal to itself, an integer equal to the
   float of the same magnitude).
 - **The runner.** Fixture rows in, `node:test` / `*testing.T` subtests
-  out, with the file and line in every failure message.
+  out (one report per fixture in Rust), with the file and line in every
+  failure message.
 - **The divergence register.** Recorded TS/Go disagreements, executed by
   both ports, where a *fixed* divergence fails as loudly as a regressed one,
   so a row cannot outlive the difference it records.
@@ -72,6 +74,9 @@ This is test-support code; it should never reach a release artifact.
 **TypeScript.** Install it as a `devDependency` and import it only from
 `test/`, so it is neither installed by consumers nor reachable from
 `dist/`.
+
+**Rust.** Take it as a `[dev-dependencies]` path entry on a sibling
+checkout; a dev-dependency is never built into a release artifact.
 
 **Go** has no `devDependencies`, and does not need them: the guarantee
 comes from the **import graph** instead of from metadata.
@@ -126,14 +131,22 @@ func TestSpec(t *testing.T) {
 }
 ```
 
-Both walk up from where they are told to start until they find a
+Rust:
+
+```rust
+let dir = find_spec_dir(Some(Path::new(env!("CARGO_MANIFEST_DIR")))).unwrap();
+Runner::new(move |input| parse_with_my_grammar(input)).dir(dir.join("happy"));
+```
+
+All three walk up from where they are told to start until they find a
 `test/spec` directory, run every `.tsv` in the named subdirectory, and
 report per row with the fixture's own line numbers.
 
 ## The adder grammar
 
-[`ts/src/adder.ts`](ts/src/adder.ts) and
-[`go/adder/adder.go`](go/adder/adder.go) hold the integer-addition grammar
+[`ts/src/adder.ts`](ts/src/adder.ts),
+[`go/adder/adder.go`](go/adder/adder.go) and
+[`rs/adder/src/lib.rs`](rs/adder/src/lib.rs) hold the integer-addition grammar
 from the `@tabnas/parser` README (`1+2+3` => 6), as a plugin:
 
 ```

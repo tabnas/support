@@ -1,0 +1,61 @@
+# PROPOSED workflow -- lives in ci/workflows/ for review; move to
+# .github/workflows/rust.yml to activate, per admin DECISIONS.md ADR-8.
+#
+# The Rust gate. Standalone rather than an arm of ci.yml, because ci.yml
+# calls the org-shared polyglot workflow and that takes no Rust input:
+# promoting this file needs no change in tabnas/.github.
+name: Rust
+
+# Runs on EVERY branch push, not just main, and the path lists are
+# written out twice: GitHub Actions has no YAML anchors, and a gate that
+# reaches a pull request green because it never executed is worse than
+# no gate. `branches` is set explicitly so a `ts/v...` tag push (which
+# `paths` cannot filter) does not run the whole gate once per tag.
+on:
+  push:
+    branches: [ '**' ]
+    paths:
+      - 'rs/**'
+      - 'test/spec/**'
+      - 'ts/package.json'
+      - 'ci/rust/**'
+      - '.github/workflows/rust.yml'
+  pull_request:
+    paths:
+      - 'rs/**'
+      - 'test/spec/**'
+      - 'ts/package.json'
+      - 'ci/rust/**'
+      - '.github/workflows/rust.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      # Checked out into a NAMED directory: rs/adder/Cargo.toml takes the
+      # engine as `path = "../../../parser/rs"`, so the engine has to sit
+      # beside this checkout rather than inside it.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
+        with:
+          path: support
+
+      # Engine main, not a release: the crate is unpublished, so this is
+      # the only resolution there is.
+      - name: Clone the sibling engine
+        run: git clone --depth 1 https://github.com/tabnas/parser.git parser
+
+      # Pinned to the MSRV in rs/Cargo.toml rather than to `stable`, so
+      # this fails on a change that needs a newer compiler instead of
+      # passing here and breaking for anyone honouring rust-version.
+      - name: Set up Rust MSRV
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.85'
+          components: rustfmt, clippy
+
+      - name: Rust gate
+        run: support/ci/rust/run.sh

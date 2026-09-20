@@ -1,22 +1,23 @@
-# Build and test both the TypeScript (ts/) and Go (go/) implementations.
-# ts/ is canonical; go/ tracks it.
+# Build and test the TypeScript (ts/), Go (go/) and Rust (rs/)
+# implementations. ts/ is canonical; go/ and rs/ track it.
 #
 # go/adder is a SEPARATE module — the support module itself has no
 # dependencies, and the grammar that exercises it needs the parser — so
 # `go test ./...` in go/ does not reach it and it is run explicitly here.
+# rs/adder is a separate crate for the same reason, and is run the same way.
 
-.PHONY: all build test clean build-ts build-go test-ts test-go test-go-adder \
-        clean-ts clean-go publish-ts publish-go tag-ts tags-go reset fmt-go vet \
-        version \
+.PHONY: all build test clean build-ts build-go build-rs test-ts test-go test-go-adder \
+        test-rs clean-ts clean-go clean-rs publish-ts publish-go tag-ts tags-go reset \
+        fmt-go vet version version-rs \
         prose prose-counts
 
 all: build test
 
-build: build-ts build-go
+build: build-ts build-go build-rs
 
-test: test-ts test-go test-go-adder
+test: test-ts test-go test-go-adder test-rs
 
-clean: clean-ts clean-go
+clean: clean-ts clean-go clean-rs
 
 # --- TypeScript (package in ts/) ---
 build-ts:
@@ -87,7 +88,23 @@ version:
 	sed -i.bak 's/^const VERSION = ".*"/const VERSION = "$(V)"/' go/support.go
 	sed -i.bak 's|^\(	github.com/tabnas/support/go \)v.*|\1v$(V)|' go/adder/go.mod
 	rm -f ts/src/support.ts.bak go/support.go.bak go/adder/go.mod.bak
-	@echo "version set to $(V) in ts/package.json, ts/src/support.ts, go/support.go, go/adder/go.mod"
+	$(MAKE) version-rs V=$(V)
+	@echo "version set to $(V) in ts/package.json, ts/src/support.ts, go/support.go, go/adder/go.mod, rs/Cargo.toml, rs/src/lib.rs, rs/adder/Cargo.toml"
+
+# Set the Rust version sites: make version-rs V=x.y.z
+#
+# Three sites, plus each crate's own entry in its Cargo.lock, which
+# rs/tests/version_test.rs holds to ts/package.json. Neither commits nor
+# tags: the crates depend on the engine by path, and crates.io does not
+# accept a path dependency, so they are not published. Only the
+# constants need to stay in step.
+version-rs:
+	@test -n "$(V)" || (echo "Usage: make version-rs V=x.y.z" && exit 1)
+	sed -i.bak 's/^version = ".*"/version = "$(V)"/' rs/Cargo.toml rs/adder/Cargo.toml
+	sed -i.bak 's/^pub const VERSION: &str = ".*";/pub const VERSION: \&str = "$(V)";/' rs/src/lib.rs
+	rm -f rs/Cargo.toml.bak rs/adder/Cargo.toml.bak rs/src/lib.rs.bak
+	cd rs && cargo metadata --format-version 1 --offline >/dev/null
+	cd rs/adder && cargo metadata --format-version 1 --offline >/dev/null
 
 # --- Go (module in go/, plus the adder module in go/adder/) ---
 build-go:
@@ -110,6 +127,21 @@ vet:
 clean-go:
 	cd go && go clean
 	cd go/adder && go clean
+
+# --- Rust (crate in rs/, plus the adder crate in rs/adder/) ---
+build-rs:
+	cd rs && cargo build --all-targets
+	cd rs/adder && cargo build --all-targets
+
+test-rs:
+	cd rs && cargo test --all-targets && cargo test --doc
+	cd rs && cargo clippy --all-targets --all-features -- -D warnings
+	cd rs/adder && cargo test --all-targets && cargo test --doc
+	cd rs/adder && cargo clippy --all-targets --all-features -- -D warnings
+
+clean-rs:
+	cd rs && cargo clean
+	cd rs/adder && cargo clean
 
 # Publish the Go modules: make publish-go V=x.y.z
 # Injects V into the Go VERSION const, commits, tags BOTH modules, and
@@ -185,6 +217,8 @@ reset:
 	cd ts && npm run reset
 	cd go && go clean -cache && go build ./... && go test ./...
 	cd go/adder && go test ./...
+	cd rs && cargo clean && cargo test --all-targets
+	cd rs/adder && cargo clean && cargo test --all-targets
 
 # The prose gate (see docs/STYLE-GUIDE.md). Vale over the reader-facing
 # pages, at the levels set in .vale.ini, on the same file list

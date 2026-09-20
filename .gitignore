@@ -150,3 +150,6 @@ vite.config.ts.timestamp-*
 
 # Written by the counts script while measuring, removed after.
 .vale-counts.ini
+
+# Cargo build output for the Rust crates under rs/.
+target/

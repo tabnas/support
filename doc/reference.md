@@ -1,13 +1,16 @@
 # Reference
 
-The fixture format, and the full API in both runtimes side by side. The
-two are written to behave identically; where a difference is unavoidable
-it is marked **⚠ differs** and explained. There are six, and adding a
-seventh without documenting it silently breaks the guarantee the package
+The fixture format, and the full API in the TypeScript and Go runtimes
+side by side, with the Rust API in its own section at the end. The
+runtimes are written to behave identically; where a difference is
+unavoidable it is marked **⚠ differs** and explained. There are six
+between TypeScript and Go, and the Rust section lists its own; adding
+one without documenting it silently breaks the guarantee the package
 exists to provide.
 
 - TypeScript: `@tabnas/support`, source in [`../ts/src/`](../ts/src/).
 - Go: `github.com/tabnas/support/go`, source in [`../go/`](../go/).
+- Rust: `tabnas-support`, source in [`../rs/src/`](../rs/src/).
 
 Neither belongs in a release artifact: `@tabnas/support` is a
 `devDependency` imported only from `test/`, and its Go half is imported
@@ -619,3 +622,80 @@ hold.
 > **⚠ differs.** TypeScript has one number type; Go's `#NR` token value is
 > widened to `float64` by an unexported helper, so the total is one type
 > throughout.
+
+## Rust API
+
+The Rust crate mirrors the two halves above function for function, in
+Rust idiom. It has no required dependencies: the JSON an expected cell
+holds is read and written by the crate itself. The optional `serde_json`
+feature adds `From<serde_json::Value>` for `Value` and the reverse.
+
+| TypeScript | Rust |
+|---|---|
+| `unescape(src)` | `unescape(src: &str) -> String` |
+| `escape(src)` | `escape(src: &str) -> String` |
+| `SpecRow`, `SpecFile`, `SpecOptions` | `Row`, `SpecFile`, `SpecOptions` |
+| `parseSpec(file, text, options?)` | `parse_spec(file, text, &SpecOptions) -> Result<SpecFile>` |
+| `loadSpec(path, options?)` | `load_spec(path, &SpecOptions) -> Result<SpecFile>` |
+| `loadSpecDir(dir, options?)` | `load_spec_dir(dir, &SpecOptions) -> Result<Vec<SpecFile>>` |
+| `findSpecDir(from?)` | `find_spec_dir(from: Option<&Path>) -> Result<PathBuf>` |
+| `row.col(i)`, `row.unesc(i)` | `row.col(i) -> &str`, `row.unesc(i) -> String` |
+| `row.named(name)`, `row.unescNamed(name)` | `row.named(name) -> &str`, `row.unesc_named(name) -> String` |
+| `row.index_of(name)` | `row.index_of(name) -> Option<usize>` |
+| `row.resolve(sel)` | `row.resolve(&Column) -> Result<usize>` |
+| `row.where()` | `row.location() -> String` |
+| `ERROR_PREFIX` | `ERROR_PREFIX` |
+| `isErrorExpect(expected)` | `is_error_expect(expected) -> bool` |
+| `errorCode(expected)` | `error_code(expected) -> Result<String>` |
+| `errorExpect(expected)` | `error_expect(expected) -> Result<ErrorExpect>` |
+| `parseExpect(expected)` | `parse_expect(expected) -> Result<Value>` |
+| `equalValue(got, expected, options?)` | `equal_value(&got, &expected) -> bool`, `equal_value_with(&got, &expected, &normalize) -> bool` |
+| `formatValue(val)` | `format_value(&Value) -> String` |
+| `loneSurrogateAt(cell)` | `lone_surrogate_at(cell) -> Option<usize>` |
+| `loneSurrogateMessage(cell, at)` | `lone_surrogate_message(cell, at) -> String` |
+| `makeRunner(options)` | `Runner::new(parse)` or `Runner::new_with_row(parse)`, then the builder methods `match_error`, `parse_expected`, `normalize`, `input`, `expected`, `load` |
+| `runner.spec(spec)`, `.file(path)`, `.dir(dir)` | `runner.spec(&spec)`, `.file(path)`, `.dir(dir)` (panic with every failing row), or `run_spec`, `run_file`, `run_dir` (return the failures) |
+| `runner.checkSpec(spec)`, `runner.row(row, input, expected)` | `runner.check_spec(&spec) -> Result<()>`, `runner.check_row(&row, input, expected) -> Result<()>` |
+| `makeRegister(options)` | `Register::new(runner, runtime, &runtimes)` |
+| `register.spec(spec)`, `.file(path)` | `register.spec(&spec)`, `.file(path)`, `run_spec`, `run_file`, `check_row(&row, input)` |
+| `noDivergences(where)` | `no_divergences(where)` |
+| `codesInSpecDir(dir, options?)` | `codes_in_spec_dir(dir, &CensusOptions) -> Result<Vec<String>>` |
+| `compareCatalogues(a, b)` | `compare_catalogues(&a, &b) -> CatalogueDiff` |
+| `coverage(declared, exercised)` | `coverage(&declared, &exercised) -> CoverageReport` |
+
+### The value model
+
+`Value` is the fixture data model: `Undefined`, `Null`, `Bool`,
+`Number(f64)`, `String`, `Array`, `Object` (entries in document order).
+Its equality is the ADR-15 contract: structural, key-order independent,
+`-0` not equal to `0`, `NaN` equal to itself, and every number an `f64`,
+so `1` and `1.0` are the same number. A parse hook returns one, built
+from the parser's own value; the `serde_json` feature makes that one
+conversion when the parser produces a `serde_json::Value`.
+
+### Where Rust differs
+
+> **⚠ differs.** The parse hook returns a `Failure` struct (code,
+> optional position, message) rather than an error the runner reads by
+> shape. The crate cannot name the engine's error type, so the suite
+> converts at the boundary, and the `errorCode` and `errorPos` hooks do
+> not exist.
+
+> **⚠ differs.** There are no subtests. A fixture's failing rows are
+> collected and reported at once, each prefixed `<file>:<line>`, so the
+> `caseName` hook does not exist either.
+
+> **⚠ differs.** `Undefined` is a `Value` variant, distinct from `Null`,
+> as in TypeScript. Go reads both as `nil`.
+
+> **⚠ differs.** `resolve` takes a `Column` (a position or a name), where
+> TypeScript takes `number | string` and Go has no such method.
+
+> **⚠ differs.** A lone `\uXXXX` surrogate escape decodes to U+FFFD, the
+> Go reading, because a Rust string is UTF-8. The runner refuses such a
+> cell in a shared expected column before comparing it, so this only
+> matters to a suite reading one deliberately.
+
+> **⚠ differs.** Every fallible function returns
+> `Result<_, tabnas_support::Error>`, the Rust convention, with the same
+> message text the other halves raise.

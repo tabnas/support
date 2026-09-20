@@ -1,0 +1,37 @@
+# The Rust half of @tabnas/support. ts/ is canonical; go/ and this crate
+# track it. `version` MUST equal ts/package.json "version" and `VERSION`
+# in src/lib.rs: tests/version_test.rs fails the build when they drift.
+
+[package]
+name = "tabnas-support"
+version = "0.3.4"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+description = "Shared test-support utilities for the tabnas parser system: the TSV fixture loader, the escape codec, the expectation helpers, the runner, the divergence register and the code census."
+repository = "https://github.com/tabnas/support"
+readme = "README.md"
+keywords = ["tabnas", "parser", "test", "fixtures"]
+categories = ["development-tools::testing"]
+# The adder crate under adder/ needs the engine and is a separate package
+# for the same reason go/adder is a separate module: this crate carries no
+# dependencies, and the grammar that exercises it needs the parser.
+exclude = ["adder/**"]
+
+[lib]
+name = "tabnas_support"
+path = "src/lib.rs"
+
+# NO required dependencies, by design. Every tabnas Rust crate would take
+# this one as a dev-dependency, so anything it required would land in all
+# of them, the engine it exists to test included. The JSON reader and
+# writer that the expectation helpers need are written out in src/value.rs
+# rather than borrowed.
+[dependencies]
+# Opt-in bridge to serde_json's value type, for a suite whose parser
+# already produces one (the engine's `Value::to_json` does). Off by
+# default so the crate stays dependency-free for everyone else.
+serde_json = { version = "1.0", optional = true }
+
+[features]
+serde_json = ["dep:serde_json"]
