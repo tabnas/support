@@ -67,6 +67,7 @@ lock_without_sibling_versions() {
 
 gate() {
   local dir=$1
+  local no_features=${2:-}
   cd "$dir"
   check_lock_version "$dir"
 
@@ -82,6 +83,12 @@ gate() {
   # `--all-targets` does NOT include doctests.
   "${CARGO[@]}" test --doc
   "${CARGO[@]}" clippy --all-targets --all-features -- -D warnings
+  # AFTER the snapshot above, like every other cargo command here: run
+  # before it, this pass would rewrite a stale lock and the comparison
+  # below would then bless the rewritten file.
+  if [[ "$no_features" == "--no-features" ]]; then
+    "${CARGO[@]}" clippy --all-targets -- -D warnings
+  fi
 
   if ! diff -q <(lock_without_sibling_versions "$before") \
                <(lock_without_sibling_versions Cargo.lock) >/dev/null; then
@@ -97,7 +104,5 @@ gate() {
 
 # The support crate must also build with no features at all: that is the
 # configuration every consumer that does not opt into serde_json gets.
-( cd "$ROOT/rs" && "${CARGO[@]}" clippy --all-targets -- -D warnings )
-
-gate "$ROOT/rs"
+gate "$ROOT/rs" --no-features
 gate "$ROOT/rs/adder"

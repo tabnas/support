@@ -225,11 +225,18 @@ fn format_number(n: f64) -> String {
     }
     let magnitude = n.abs();
     if !(1e-6..1e21).contains(&magnitude) {
-        return format!("{n:e}");
+        // JavaScript writes the exponent with an explicit sign (`1e+21`);
+        // Rust's `{:e}` leaves a positive one bare.
+        let exp = format!("{n:e}");
+        return match exp.find('e') {
+            Some(at) if !exp[at + 1..].starts_with('-') => {
+                format!("{}e+{}", &exp[..at], &exp[at + 1..])
+            }
+            _ => exp,
+        };
     }
-    if n.fract() == 0.0 {
-        return format!("{}", n as i64);
-    }
+    // `Display` already writes an integral f64 without a fraction, at every
+    // magnitude below 1e21. A cast through i64 would saturate above 2^63.
     format!("{n}")
 }
 

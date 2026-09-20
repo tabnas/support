@@ -202,6 +202,18 @@ fn formats_signed_zero_and_the_values_json_cannot_spell() {
     assert_eq!(format_value(&Value::Number(0.0)), "0");
     assert_eq!(format_value(&Value::Number(1.0)), "1");
     assert_eq!(format_value(&Value::Number(2.5)), "2.5");
+    // Integral values above 2^63 must not go through an i64 cast.
+    assert_eq!(format_value(&Value::Number(1e20)), "100000000000000000000");
+    assert_eq!(
+        format_value(&Value::Number(-1e20)),
+        "-100000000000000000000"
+    );
+    assert_eq!(format_value(&Value::Number(9.3e18)), "9300000000000000000");
+    // The exponent form is JavaScript's, sign included.
+    assert_eq!(format_value(&Value::Number(1e21)), "1e+21");
+    assert_eq!(format_value(&Value::Number(-1.5e25)), "-1.5e+25");
+    assert_eq!(format_value(&Value::Number(1.5e-7)), "1.5e-7");
+    assert_eq!(format_value(&Value::Number(0.000001)), "0.000001");
     assert_eq!(format_value(&Value::Number(f64::INFINITY)), "Infinity");
     assert_eq!(format_value(&Value::Number(f64::NAN)), "NaN");
     assert_eq!(format_value(&Value::Undefined), "undefined");
