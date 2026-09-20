@@ -99,6 +99,13 @@ gate() {
     rm -f "$before"
     exit 1
   fi
+  # The exempted sibling version may still have moved, and cargo wrote it
+  # into the lock. Put the lock back so a green gate leaves the tree
+  # exactly as it found it: updating the committed lock is a deliberate
+  # cargo run and commit, never a side effect of running the gate.
+  if ! cmp -s "$before" Cargo.lock; then
+    cp "$before" Cargo.lock
+  fi
   rm -f "$before"
 }
 
