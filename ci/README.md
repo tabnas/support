@@ -4,6 +4,14 @@ Staging area for GitHub Actions workflow changes.
 
 ## Pending
 
+- **`workflows/rust.yml`** — the Rust gate: `ci/rust/run.sh` over the
+  `rs/` crate and the `rs/adder/` crate (formatting, both lockfiles,
+  build, tests, doctests, clippy), with `tabnas/parser` cloned as a
+  sibling because the adder crate takes the engine by path. Standalone
+  rather than an arm of `ci.yml`, since the shared polyglot workflow
+  takes no Rust input. Runs on `rs/**`, `test/spec/**`, `ts/package.json`
+  and its own files.
+
 - **`workflows/docs.yml`** — the prose gate: Vale over the reader-facing
   pages at the levels set in `.vale.ini`, on the file list
   `ts/scripts/gated-docs.cjs` produces. See `docs/STYLE-GUIDE.md`.
@@ -74,6 +82,7 @@ before release) lives in the shared reusable workflow — change it in
 Everything CI runs is runnable locally:
 
 ```bash
-make test    # ts/, go/ and go/adder/
-make vet     # go vet over both modules
+make test         # ts/, go/, go/adder/, rs/ and rs/adder/
+make vet          # go vet over both modules
+ci/rust/run.sh    # the Rust gate exactly as the staged workflow runs it
 ```

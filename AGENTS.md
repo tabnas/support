@@ -5,9 +5,9 @@
 The shared test-support utilities for the tabnas parser system, published
 as `@tabnas/support` (npm) and `github.com/tabnas/support/go`.
 
-Every tabnas package ships a canonical TypeScript implementation and a Go
-port, and proves they agree by running **one** set of TSV fixtures from
-`test/spec/` in **both**. The fixtures were already shared; the loaders
+Every tabnas package ships a canonical TypeScript implementation and
+ports of it (Go, and increasingly Rust), and proves they agree by running
+**one** set of TSV fixtures from `test/spec/` in **every runtime**. The fixtures were already shared; the loaders
 were not, and by the time there were three pairs of them they had drifted:
 `jsonic`'s TypeScript loader did not decode `\t` while its Go loader did;
 `parser`'s loaders skipped no comment lines while `jsonic`'s and `json`'s
@@ -16,7 +16,7 @@ column while their Go loaders decoded only `input`; and neither of those
 pairs decoded `\\` at all. A row that means two different things in two
 runtimes cannot pin agreement on anything else.
 
-This repo is the one loader, in two languages. Where the three disagreed,
+This repo is the one loader, in three languages. Where the three disagreed,
 it follows `@tabnas/json` — the newest pair, and the only one whose two
 sides already matched.
 
@@ -27,6 +27,8 @@ sides already matched.
 | `ts/` | **Canonical** TypeScript package (`@tabnas/support`). Source in `src/`: `escape.ts`, `spec.ts`, `expect.ts`, `runner.ts`, `census.ts`, the `support.ts` entry point, and `adder.ts`. |
 | `go/` | Go port. Module `github.com/tabnas/support/go`, **no dependencies**. Same files: `escape.go`, `spec.go`, `expect.go`, `runner.go`, `census.go`, plus `support.go` for the package doc, `VERSION` and the pointer helpers. |
 | `go/adder/` | **Separate module** (`github.com/tabnas/support/go/adder`) holding the adder grammar, which needs the parser. |
+| `rs/` | Rust port. Crate `tabnas-support` (library `tabnas_support`), **no required dependencies**: `escape.rs`, `spec.rs`, `expect.rs`, `runner.rs`, `register.rs`, `census.rs`, plus `value.rs`, the fixture data model with its own JSON reader and writer. See [`rs/AGENTS.md`](rs/AGENTS.md). |
+| `rs/adder/` | **Separate crate** (`tabnas-support-adder`) holding the adder grammar, which needs the engine as a sibling checkout (`../../../parser/rs`). |
 | `test/spec/` | Shared `.tsv` fixtures. See [`test/AGENTS.md`](test/AGENTS.md). |
 | `doc/reference.md` | The fixture format and the full API in both languages, side by side. |
 
@@ -35,12 +37,15 @@ sides already matched.
 1. **TypeScript is canonical.** When TS and Go disagree on behaviour, TS
    wins; change Go, and add a shared fixture when the behaviour is
    expressible as input → output.
-2. **The Go support module takes no dependencies.** Every tabnas repo
-   depends on it, so anything it required would land in all of them —
-   including the parser it is used to test. This is why the adder grammar
-   is a separate module, and why `Runner` reads a parse error's code by
-   shape (a `Code() string` method or a `Code` string field) rather than
-   by importing `*tabnas.TabnasError`.
+2. **The Go support module and the Rust support crate take no
+   dependencies.** Every tabnas repo depends on them, so anything they
+   required would land in all of them — including the parser they are
+   used to test. This is why the adder grammar is a separate module and a
+   separate crate, why Go's `Runner` reads a parse error's code by shape
+   (a `Code() string` method or a `Code` string field) rather than by
+   importing `*tabnas.TabnasError`, and why the Rust runner takes a
+   `Failure` struct the suite builds at the boundary. The Rust crate's
+   only dependency is the optional, off-by-default `serde_json` feature.
 3. **A behaviour difference between the runtimes is a defect until it is
    documented.** The unavoidable ones are marked **⚠ differs** in
    `doc/reference.md`; there are six, and each says why. Adding a seventh
@@ -54,11 +59,13 @@ sides already matched.
    runtime's own limits and are shared rather than papered over —
    integers beyond 2^53 are inexact in both, and making Go exact would
    make it *reject* rows TypeScript accepts.
-4. **The version is one number, in four places, all four checked.**
+4. **The version is one number, in seven places, all seven checked.**
    `ts/package.json` is the source of truth. `ts/test/version.test.js`
    pins `ts/src/support.ts` to it; `go/version_test.go` reads it off
    disk and pins both `go/support.go` (`VERSION`) and the `require` on
-   the support module in `go/adder/go.mod`.
+   the support module in `go/adder/go.mod`; `rs/tests/version_test.rs`
+   pins `rs/Cargo.toml`, `rs/src/lib.rs` (`VERSION`) and
+   `rs/adder/Cargo.toml`.
 
    That fourth site is the one a stale version breaks nothing local: a
    `replace` covers it for anyone building in this repo, but a `replace`
@@ -67,7 +74,7 @@ sides already matched.
    at `v0.1.0` through the 0.1.1 release because nothing looked. Now
    something does.
 
-   `make version V=x.y.z` sets all four; `make publish-go` refuses to
+   `make version V=x.y.z` sets all seven; `make publish-go` refuses to
    run when `ts/` has not been bumped first.
 5. **This is test-support code and must never reach a release
    artifact.** In TypeScript that means a `devDependency` imported only
@@ -78,8 +85,8 @@ sides already matched.
 
 ## Testing rules
 
-- A new fixture must pass in BOTH runtimes. `make test` runs everything:
-  `ts/`, `go/` and `go/adder/`.
+- A new fixture must pass in EVERY runtime. `make test` runs everything:
+  `ts/`, `go/`, `go/adder/`, `rs/` and `rs/adder/`.
 - **An empty fixture and an empty fixture directory must fail.** A fixture
   that loads but holds nothing is a silent pass, and a silent pass is
   indistinguishable from coverage that was never there. The empty
@@ -92,8 +99,9 @@ sides already matched.
   them has a test asserting it fails when it should. A runner that
   quietly passes is the one bug that hides every other one, so no guard
   here is allowed to be unassertable.
-- **Every shared fixture must run in BOTH runtimes**, and the census
-  tests (`go/census_test.go`, `ts/test/census.test.js`) enforce it.
+- **Every shared fixture must run in EVERY runtime**, and the census
+  tests (`go/census_test.go`, `ts/test/census.test.js`,
+  `rs/tests/census_test.rs`) enforce it.
   `test/spec/adder/` is discovered by directory listing in both, so a
   fixture added there runs in both automatically. `test/spec/util/` and
   `test/spec/census/` cannot be — each file has its own column shape and

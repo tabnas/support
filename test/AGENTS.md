@@ -78,23 +78,26 @@ neighbour. See [`doc/reference.md`](../doc/reference.md).
 
 ## Who runs what
 
-| Fixture | TypeScript | Go |
-|---|---|---|
-| `spec/adder/*.tsv` | `ts/test/adder.test.js` | `go/adder/adder_test.go` |
-| `spec/util/codec.tsv` | `ts/test/codec.test.js` | `go/escape_test.go` |
-| `spec/util/expect-error.tsv` | `ts/test/expect.test.js` | `go/expect_test.go` |
-| `spec/util/value-equal.tsv` | `ts/test/expect.test.js` | `go/expect_test.go` |
-| `spec/util/loader-rows.tsv` | `ts/test/spec.test.js` | `go/spec_test.go` |
-| `spec/census/codes.tsv` | `ts/test/census.test.js` | `go/census_test.go` |
-| `spec/census/named-col.tsv` | `ts/test/census.test.js` | `go/census_test.go` |
+| Fixture | TypeScript | Go | Rust |
+|---|---|---|---|
+| `spec/adder/*.tsv` | `ts/test/adder.test.js` | `go/adder/adder_test.go` | `rs/adder/tests/adder_test.rs` |
+| `spec/util/codec.tsv` | `ts/test/codec.test.js` | `go/escape_test.go` | `rs/tests/codec_test.rs` |
+| `spec/util/expect-error.tsv` | `ts/test/expect.test.js` | `go/expect_test.go` | `rs/tests/expect_test.rs` |
+| `spec/util/value-equal.tsv` | `ts/test/expect.test.js` | `go/expect_test.go` | `rs/tests/expect_test.rs` |
+| `spec/util/lone-surrogate.tsv` | `ts/test/expect.test.js` | `go/expect_test.go` | `rs/tests/expect_test.rs` |
+| `spec/util/loader-rows.tsv` | `ts/test/spec.test.js` | `go/spec_test.go` | `rs/tests/spec_test.rs` |
+| `spec/census/codes.tsv` | `ts/test/census.test.js` | `go/census_test.go` | `rs/tests/census_test.rs` |
+| `spec/census/named-col.tsv` | `ts/test/census.test.js` | `go/census_test.go` | `rs/tests/census_test.rs` |
+| `spec/register/divergent.tsv` | `ts/test/register.test.js` | `go/register_test.go` | `rs/tests/register_test.rs` |
 
-`spec/adder/` is discovered by directory listing in both runtimes: adding a
-`.tsv` there runs it in both without touching either runner. The `util/`
+`spec/adder/` is discovered by directory listing in every runtime: adding a
+`.tsv` there runs it everywhere without touching a runner. The `util/`
 and `census/` fixtures are named explicitly, because each has its own
 column shape.
 
-**A `util/` or `census/` fixture must be wired into both runtimes, and
-the census tests check it** (`go/census_test.go`, `ts/test/census.test.js`):
+**A `util/`, `census/` or `register/` fixture must be wired into every
+runtime, and the census tests check it** (`go/census_test.go`,
+`ts/test/census.test.js`, `rs/tests/census_test.rs`):
 each asserts that every `*.tsv` in those directories is named somewhere in
 its own test sources, so adding a fixture and wiring up one side turns the
 other side red. A row only one runtime runs is agreed by nobody, which is
@@ -112,9 +115,9 @@ not add or remove lines above the data without updating both assertions.
 - TypeScript is canonical. If the two runtimes disagree, the TS behaviour
   is the expected value — unless Go has exposed a genuine TS defect, in
   which case fix TS first and pin the corrected behaviour here.
-- A new fixture must pass in BOTH runtimes: run `make test` (or `go test
-  ./...` from `go/` and `go/adder/`, and `npm test` from `ts/`) before
-  considering it done.
+- A new fixture must pass in EVERY runtime: run `make test` (or `go test
+  ./...` from `go/` and `go/adder/`, `npm test` from `ts/`, and
+  `cargo test` from `rs/` and `rs/adder/`) before considering it done.
 - Some behaviour cannot be written down here — `NaN`, an explicit
   `undefined` key, Go's numeric types. Those stay as in-language cases
   next to the fixture-driven ones, and both runtimes carry their own.

@@ -1,0 +1,32 @@
+# The adder grammar is a SEPARATE package from tabnas-support on purpose,
+# for the reason go/adder is a separate module: the support crate is a
+# dev-dependency of every tabnas Rust crate, so it carries no
+# dependencies of its own; this one needs the engine, and splitting them
+# is what lets both facts hold.
+#
+# `version` MUST equal ts/package.json "version": the support crate's
+# tests/version_test.rs holds it there.
+
+[package]
+name = "tabnas-support-adder"
+version = "0.3.4"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+description = "The adder grammar from the tabnas parser README, as the end-to-end check on tabnas-support."
+repository = "https://github.com/tabnas/support"
+publish = false
+
+[lib]
+name = "tabnas_support_adder"
+path = "src/lib.rs"
+
+[dependencies]
+# The engine is consumed as a SIBLING CHECKOUT, the standard tabnas
+# development model: clone https://github.com/tabnas/parser next to the
+# support repository. The `tabnas` crate is not published, so there is no
+# registry version to fall back on.
+tabnas = { path = "../../../parser/rs" }
+
+[dev-dependencies]
+tabnas-support = { path = "..", features = ["serde_json"] }
