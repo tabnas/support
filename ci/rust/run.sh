@@ -74,6 +74,10 @@ gate() {
   local before
   before=$(mktemp)
   cp Cargo.lock "$before"
+  # On any exit, a red run included, put the lock back if a cargo command
+  # rewrote it, then drop the snapshot: the tree is left as it was found.
+  LOCK_BEFORE=$before LOCK_DIR=$dir
+  trap 'if [ -f "$LOCK_BEFORE" ] && ! cmp -s "$LOCK_BEFORE" "$LOCK_DIR/Cargo.lock"; then cp "$LOCK_BEFORE" "$LOCK_DIR/Cargo.lock"; fi; rm -f "$LOCK_BEFORE"' EXIT
 
   # NOT `--all` for fmt: the adder crate's path dependency is the engine,
   # and `--all` would format the sibling checkout too.
