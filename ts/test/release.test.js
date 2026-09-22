@@ -12,9 +12,8 @@
  * fails at release time; the breakage surfaces later, in a consumer.
  *
  * Session credentials cannot WRITE `.github/workflows/*` (ADR-8) -- but
- * they can read it, and once a maintainer has promoted a workflow the
- * deployed copy is the one that releases. So this reads whichever of the
- * two exists, preferring the deployed copy:
+ * they can read it, so BOTH copies are checked, and neither stands in
+ * for the other:
  *
  *   - before promotion, only `ci/workflows/release.yml` exists, and a
  *     staged fix that silently loses the third tag is the same defect
@@ -40,53 +39,75 @@ const STAGED = Path.join(REPO, 'ci', 'workflows', 'release.yml')
 
 const TAGS = ['ts/v$V', 'go/v$V', 'go/adder/v$V']
 
-// The deployed copy wins when it exists: it is what actually releases,
-// and after promotion the staged copy is gone. Returns null when neither
-// is present, which the first case below is what reports.
-function releaseWorkflow() {
-  for (const path of [DEPLOYED, STAGED]) {
-    if (Fs.existsSync(path)) return { path, src: Fs.readFileSync(path, 'utf8') }
+// Every copy that exists, deployed first. The deployed one is required;
+// a staged candidate is optional and held to the same rules.
+function releaseWorkflows() {
+  const found = []
+  for (const [label, path] of [['deployed', DEPLOYED], ['staged', STAGED]]) {
+    if (Fs.existsSync(path)) found.push({ label, path, src: Fs.readFileSync(path, 'utf8') })
   }
-  return null
+  return found
+}
+
+// Runs `check` over each copy, naming which one failed. A rule that holds
+// for the deployed file and not for the candidate is a rule that stops
+// holding the day the candidate is promoted.
+function forEachCopy(check) {
+  const copies = releaseWorkflows()
+  assert.ok(copies.length, 'no release.yml at all: neither deployed nor staged')
+  for (const copy of copies) {
+    try {
+      check(copy.src)
+    } catch (e) {
+      e.message = `${copy.label} (${Path.relative(REPO, copy.path)}): ${e.message}`
+      throw e
+    }
+  }
 }
 
 
 describe('release workflow', () => {
 
-  it('has a release.yml, deployed or staged', () => {
+  it('has a DEPLOYED release.yml', () => {
+    // Not "one of the two". A staged candidate cannot receive a dispatch
+    // or publish a release, so its presence says nothing about whether
+    // this repository can still cut one.
     assert.ok(
-      releaseWorkflow(),
-      'neither .github/workflows/release.yml nor ci/workflows/release.yml exists')
+      Fs.existsSync(DEPLOYED),
+      '.github/workflows/release.yml is missing: a staged candidate cannot release')
   })
 
   it('tags all three refs from one list', () => {
-    const { src } = releaseWorkflow()
+    forEachCopy((src) => {
 
-    // ONE list, not three greps. The already-released guard, the anchor
-    // choice and the atomic push all read this loop, so a tag named
-    // anywhere else would be tagged without being guarded.
-    const loop = src.match(/^\s*for T in ([^\n]*?); do$/m)
-    assert.ok(loop, 'no `for T in ...; do` tag list in the staged workflow')
+      // ONE list, not three greps. The already-released guard, the anchor
+      // choice and the atomic push all read this loop, so a tag named
+      // anywhere else would be tagged without being guarded.
+      const loop = src.match(/^\s*for T in ([^\n]*?); do$/m)
+      assert.ok(loop, 'no `for T in ...; do` tag list')
 
-    const tags = loop[1].match(/"([^"]+)"/g).map((s) => s.slice(1, -1))
-    assert.deepEqual(tags, TAGS)
+      const tags = loop[1].match(/"([^"]+)"/g).map((s) => s.slice(1, -1))
+      assert.deepEqual(tags, TAGS)
+    })
   })
 
   it('pushes the tag list atomically', () => {
-    const { src } = releaseWorkflow()
+    forEachCopy((src) => {
 
-    // Pushed one at a time, ts/v could land and go/adder/v fail, leaving
-    // npm published and the nested module unreleased.
-    assert.match(src, /git push --atomic origin \$\{\{ steps\.tags\.outputs\.missing \}\}/)
+      // Pushed one at a time, ts/v could land and go/adder/v fail, leaving
+      // npm published and the nested module unreleased.
+      assert.match(src, /git push --atomic origin \$\{\{ steps\.tags\.outputs\.missing \}\}/)
+    })
   })
 
   it('gates every go tag behind the go input', () => {
-    const { src } = releaseWorkflow()
+    forEachCopy((src) => {
 
-    // `go/*` matches go/adder/v0.3.5 as well as go/v0.3.5, so the third
-    // tag needs no second case arm — but it does need this one to stay a
-    // prefix glob rather than becoming an exact match.
-    assert.match(src, /go\/\*\)\s*\[ "\$\{\{ inputs\.go \}\}" = "true" \] \|\| continue/)
+      // `go/*` matches go/adder/v0.3.5 as well as go/v0.3.5, so the third
+      // tag needs no second case arm — but it does need this one to stay a
+      // prefix glob rather than becoming an exact match.
+      assert.match(src, /go\/\*\)\s*\[ "\$\{\{ inputs\.go \}\}" = "true" \] \|\| continue/)
+    })
   })
 })
 
