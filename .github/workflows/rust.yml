@@ -52,7 +52,7 @@ jobs:
       # this fails on a change that needs a newer compiler instead of
       # passing here and breaking for anyone honouring rust-version.
       - name: Set up Rust MSRV
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87  # stable @ 2026-09-22
         with:
           toolchain: '1.85'
           components: rustfmt, clippy
