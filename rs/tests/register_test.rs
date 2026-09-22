@@ -36,6 +36,12 @@ fn ts_register(parse: impl Fn(&str) -> Result<Value, Failure> + 'static) -> Regi
     Register::new(Runner::new(parse), "ts", &["ts", "go"])
 }
 
+/// Every runtime column the SHARED register carries. The list is written
+/// rather than read off the header on purpose: an unnamed column is not a
+/// runtime, which is what lets a register carry a `note` or `issue`
+/// column, and means leaving one out is silent rather than an error.
+const SHARED_RUNTIMES: [&str; 3] = ["ts", "go", "rs"];
+
 fn check(register: &Register, index: usize) -> Option<String> {
     let spec = fixture();
     let row = &spec.rows[index];
@@ -164,11 +170,28 @@ fn spec_register_divergent() {
         &SpecOptions::default(),
     )
     .expect("loads");
-    let ts = ts_register(|input| match input {
-        "b" => Err(Failure::new("bad_b")),
-        "c" => Ok(Value::String("c".into())),
-        other => Ok(Value::String(other.to_uppercase())),
-    });
+
+    // The wiring below is not self-checking: an unnamed column is not a
+    // runtime, so a suite that forgets one reads a narrower register and
+    // passes. Hold the list to the file's own header, which is the one
+    // place the three suites share.
+    assert_eq!(
+        spec.header.as_slice(),
+        ["input", "ts", "go", "rs"],
+        "the shared register's columns moved: update SHARED_RUNTIMES here, \
+         and the runtimes lists in ts/test/register.test.js and go/register_test.go"
+    );
+    assert_eq!(spec.header[1..], SHARED_RUNTIMES);
+
+    let ts = Register::new(
+        Runner::new(|input| match input {
+            "b" => Err(Failure::new("bad_b")),
+            "c" => Ok(Value::String("c".into())),
+            other => Ok(Value::String(other.to_uppercase())),
+        }),
+        "ts",
+        &SHARED_RUNTIMES,
+    );
     assert_eq!(ts.run_spec(&spec).expect("runs"), Vec::<String>::new());
 
     // And as the go column, with a port that answers that column.
@@ -178,7 +201,22 @@ fn spec_register_divergent() {
             other => Ok(Value::String(other.to_string())),
         }),
         "go",
-        &["ts", "go"],
+        &SHARED_RUNTIMES,
     );
     assert_eq!(go.run_spec(&spec).expect("runs"), Vec::<String>::new());
+
+    // And as the rs column, which is the one THIS runtime owns. Row `a`
+    // is the shape two columns cannot express: rs agrees with go and
+    // still diverges from ts, so the row records a live disagreement
+    // while this port's own cell repeats another's.
+    let rs = Register::new(
+        Runner::new(|input| match input {
+            "b" => Err(Failure::new("bad_b")),
+            "c" => Ok(Value::String("C".into())),
+            other => Ok(Value::String(other.to_string())),
+        }),
+        "rs",
+        &SHARED_RUNTIMES,
+    );
+    assert_eq!(rs.run_spec(&spec).expect("runs"), Vec::<String>::new());
 }

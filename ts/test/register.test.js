@@ -17,7 +17,7 @@ const assert = require('node:assert')
 const Path = require('node:path')
 
 const {
-  findSpecDir, parseSpec, makeRegister, DivergenceRegister,
+  findSpecDir, parseSpec, loadSpec, makeRegister, DivergenceRegister,
 } = require('../dist/support.js')
 
 
@@ -227,7 +227,18 @@ describe('register', () => {
 })
 
 
+const DIVERGENT = Path.join(SPEC, 'register', 'divergent.tsv')
+
+// Every runtime column the shared register carries.
+const SHARED_RUNTIMES = ['ts', 'go', 'rs']
+
 // The shared fixture, run the way a real repo would run it.
+//
+// `runtimes` names EVERY runtime column in the file, this one included.
+// Leaving one out is silent: an unnamed column is not a runtime, which
+// is what lets a register carry a `note` or `issue` column, and is
+// exactly why the list is written rather than read off the header. The
+// file has three columns because the package has three ports.
 makeRegister({
   parse: (src) => {
     if ('a' === src) return 'A'
@@ -238,5 +249,20 @@ makeRegister({
     throw new Error('unexpected input ' + src)
   },
   runtime: 'ts',
-  runtimes: ['ts', 'go'],
-}).file(Path.join(SPEC, 'register', 'divergent.tsv'))
+  runtimes: SHARED_RUNTIMES,
+}).file(DIVERGENT)
+
+
+describe('the shared register', () => {
+
+  // The wiring above is not self-checking: an unnamed column is not a
+  // runtime, so a suite that forgets one reads a narrower register and
+  // passes. Hold the list to the file's own header, which is the one
+  // place the three suites share.
+  it('names every runtime column the file has', () => {
+    const header = loadSpec(DIVERGENT).header
+    assert.deepEqual(header, ['input', ...SHARED_RUNTIMES],
+      'the shared register\'s columns moved: update SHARED_RUNTIMES here, ' +
+      'and the runtimes lists in go/register_test.go and rs/tests/register_test.rs')
+  })
+})
