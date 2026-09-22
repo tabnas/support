@@ -54,7 +54,7 @@ is what the engine's `Value::to_json` produces.
 
 ## Install
 
-The crate is not published. Take it as a path dependency on a sibling
+The crate is not on crates.io. Take it as a path dependency on a sibling
 checkout, the standard tabnas development model:
 
 ```toml
@@ -117,10 +117,17 @@ cargo clippy --all-targets --all-features -- -D warnings
 
 The suite runs the shared `../test/spec/util`, `census` and `register`
 fixtures, the same files the TypeScript and Go suites run, plus the
-crate's own failure-behaviour tests. The [`adder`](adder/) crate runs
-`../test/spec/adder` through a real grammar and needs a sibling checkout
-of `tabnas/parser`. From the repository root, `make test-rs` runs both,
-and `ci/rust/run.sh` is the full gate.
+crate's own failure-behaviour tests. `register/divergent.tsv` carries an
+`rs` column alongside `ts` and `go`, and this suite reads it, so the
+crate is a runtime of that register rather than a reader of someone
+else's. The [`adder`](adder/) crate runs `../test/spec/adder` through a
+real grammar and needs a sibling checkout of `tabnas/parser`. From the
+repository root, `make test-rs` runs both, and `ci/rust/run.sh` is the
+full gate.
+
+Hosted CI does not run any of this yet. The Rust workflow is staged at
+`../ci/workflows/rust.yml` and has not been promoted, so `ci/rust/run.sh`
+locally is what stands in for it.
 
 ## License
 

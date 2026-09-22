@@ -179,14 +179,47 @@ func divergentGoPort(s string) (any, error) {
 	return nil, errors.New("unexpected input " + s)
 }
 
+// sharedRuntimes names EVERY runtime column the shared register carries.
+//
+// An unnamed column is not a runtime -- that is what lets a register
+// carry a note or issue column -- so a suite that forgets one reads a
+// narrower register and passes. TestRegisterSpecFileNamesEveryRuntime
+// holds this list to the file's own header.
+var sharedRuntimes = []string{"ts", "go", "rs"}
+
+func divergentPath(t *testing.T) string {
+	t.Helper()
+	return filepath.Join(specDir(t), "register", "divergent.tsv")
+}
+
 // The shared fixture, run the way a real repo would run it.
 func TestRegisterSpecFile(t *testing.T) {
 	g := Register{
 		Runner:   Runner{Parse: divergentGoPort},
 		Runtime:  "go",
-		Runtimes: []string{"ts", "go"},
+		Runtimes: sharedRuntimes,
 	}
-	g.File(t, filepath.Join(specDir(t), "register", "divergent.tsv"))
+	g.File(t, divergentPath(t))
+}
+
+// The wiring above is not self-checking. Hold the list to the file's own
+// header, which is the one place the three suites share.
+func TestRegisterSpecFileNamesEveryRuntime(t *testing.T) {
+	spec, err := LoadSpec(divergentPath(t), nil)
+	if nil != err {
+		t.Fatal(err)
+	}
+	want := append([]string{"input"}, sharedRuntimes...)
+	if len(spec.Header) != len(want) {
+		t.Fatalf("shared register header is %v, want %v", spec.Header, want)
+	}
+	for i, name := range want {
+		if spec.Header[i] != name {
+			t.Fatalf("shared register header is %v, want %v; update sharedRuntimes here, "+
+				"and the runtimes lists in ts/test/register.test.js and rs/tests/register_test.rs",
+				spec.Header, want)
+		}
+	}
 }
 
 // --- Review findings on the first cut of this file ---

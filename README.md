@@ -7,11 +7,11 @@ Docs, guides, the error reference and the playground: **[tabnas.dev](https://tab
 Every tabnas package ([parser](https://github.com/tabnas/parser),
 [json](https://github.com/tabnas/json),
 [jsonic](https://github.com/tabnas/jsonic),
-[abnf](https://github.com/tabnas/abnf), and the rest) ships two
-implementations (a
-canonical TypeScript one and a Go port) and proves they agree by running
-**one** set of TSV fixtures from `test/spec/` in **both**. This repository
-is the machinery that reads those fixtures.
+[abnf](https://github.com/tabnas/abnf), and the rest) ships a canonical
+TypeScript implementation and ports of it (Go, and increasingly Rust),
+and proves they agree by running **one** set of TSV fixtures from
+`test/spec/` in **every** runtime. This repository is the machinery that
+reads those fixtures.
 
 | Runtime | Package |
 |---|---|
@@ -41,8 +41,8 @@ runtime but only `input` in the other means an escape outside `input`
 authors to keep escapes in the input column to avoid it.
 
 A row that means two different things in two runtimes cannot pin agreement
-on anything else. So there is one loader now, in two languages, written to
-behave identically (following what `@tabnas/json`, the newest of the
+on anything else. So there is one loader now, in three languages, written
+to behave identically (following what `@tabnas/json`, the newest of the
 three, already did), and a shared fixture set that tests the loaders
 themselves, the same way the parsers' fixtures test the parsers.
 
@@ -63,9 +63,10 @@ All three runtimes expose the same things:
 - **The runner.** Fixture rows in, `node:test` / `*testing.T` subtests
   out (one report per fixture in Rust), with the file and line in every
   failure message.
-- **The divergence register.** Recorded TS/Go disagreements, executed by
-  both ports, where a *fixed* divergence fails as loudly as a regressed one,
-  so a row cannot outlive the difference it records.
+- **The divergence register.** Recorded disagreements between the ports,
+  one fixture column per runtime, executed by every port, where a *fixed*
+  divergence fails as loudly as a regressed one, so a row cannot outlive
+  the difference it records.
 
 ## Depending on it without shipping it
 
@@ -156,14 +157,17 @@ add = NR [ PL add ]  -- each number adds to it; `+` repeats
 
 It is the smallest grammar that is still a real one (two rules, one
 custom token, a push and a repeat), which makes it the end-to-end check
-that the two runtimes' utilities do the same thing. Both run it against
-the same `test/spec/adder/*.tsv` rows, so a divergence anywhere in the
-chain turns one of them red.
+that all three runtimes' utilities do the same thing. Each runs it
+against the same `test/spec/adder/*.tsv` rows, so a divergence anywhere
+in the chain turns one of them red.
 
-The Go plugin is a **separate module** (`github.com/tabnas/support/go/adder`).
-The support module itself has no dependencies and never will: every tabnas
-repo depends on it, so anything it required would land in all of them,
-including the parser it is used to test.
+The Go plugin is a **separate module**
+(`github.com/tabnas/support/go/adder`) and the Rust one a **separate
+crate** (`tabnas-support-adder`, in [`rs/adder/`](rs/adder/)). The
+support module and the support crate have no dependencies and never
+will: every tabnas repo depends on one of them, so anything they
+required would land in all of them, including the parser they are used
+to test. The grammar needs the parser, which is why it is split out.
 
 ## Documentation
 
@@ -175,8 +179,8 @@ including the parser it is used to test.
 ## Development
 
 ```bash
-make build   # both runtimes
-make test    # both runtimes, including the adder module
+make build   # all three runtimes
+make test    # all three runtimes, including both adder packages
 make vet     # go vet over both Go modules
 ```
 
@@ -185,10 +189,12 @@ publishes to npm via OIDC trusted publishing
 (`.github/workflows/release.yml`). Workflow changes are staged in
 [`ci/`](ci/README.md) first: a maintainer moves them into `.github/`.
 
-Releasing is three commands: `make version V=x.y.z` to move all four
-version sites, then `make tag-ts V=x.y.z` (npm, via OIDC trusted
+Releasing is three commands: `make version V=x.y.z` to move every
+version site, then `make tag-ts V=x.y.z` (npm, via OIDC trusted
 publishing) and `make publish-go V=x.y.z` (both Go modules). A plain
-`vX.Y.Z` tag publishes nothing. See [AGENTS.md](AGENTS.md#release).
+`vX.Y.Z` tag publishes nothing, and the nested `go/adder` module needs
+its own `go/adder/vX.Y.Z` tag or it stays unresolvable: `publish-go`
+pushes both. See [AGENTS.md](AGENTS.md#release).
 
 ## License
 

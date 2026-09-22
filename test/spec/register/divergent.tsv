@@ -1,12 +1,18 @@
-input	ts	go
+input	ts	go	rs
 # divergent.tsv -- the shape of a divergence register, used by this
 # package's own tests.
 #
-#   input  the source both ports are given.
-#   ts,go  what each port produces, in the ordinary expected vocabulary:
-#          a JSON value, or ERROR:<code>.
+#   input     the source every port is given.
+#   ts,go,rs  what each port produces, in the ordinary expected
+#             vocabulary: a JSON value, or ERROR:<code>.
 #
-# A REAL register lives in the repo whose two ports disagree, and every row
+# One column per runtime, which is what a register is: three ports means
+# three columns. Two of them are not enough to exercise the shape a real
+# register has, because a row where THIS port has converged with one
+# other and not the rest is reported differently (PARTIALLY closed) from
+# one where it has converged with all of them.
+#
+# A REAL register lives in the repo whose ports disagree, and every row
 # is a divergence someone decided not to repair. This file is a stand-in so
 # the mechanism itself can be tested; the fake parser in the tests answers
 # these inputs.
@@ -15,6 +21,6 @@ input	ts	go
 # a DISAGREEMENT. Two cells saying the same thing assert nothing and would
 # pass forever -- which is how 29 prose divergence claims outlived the
 # divergences they described.
-a	"A"	"a"
-b	ERROR:bad_b	"b"
-c	"c"	ERROR:bad_c
+a	"A"	"a"	"a"
+b	ERROR:bad_b	"b"	ERROR:bad_b
+c	"c"	ERROR:bad_c	"C"

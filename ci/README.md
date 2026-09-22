@@ -4,6 +4,27 @@ Staging area for GitHub Actions workflow changes.
 
 ## Pending
 
+- **`workflows/release.yml`** — the deployed copy plus one tag. It is
+  the promoted file with `go/adder/v$V` added to the tag list, and
+  nothing else changed.
+
+  `go/adder` is a separate Go module, and Go finds a nested module only
+  under its own path prefix, so `go/adder/vX.Y.Z` is the whole of that
+  module's release. The deployed workflow writes `ts/v` and `go/v` and
+  stops, which left `github.com/tabnas/support/go/adder` unresolvable at
+  v0.3.1 through v0.3.4: npm published, both tags landed, and the
+  release-time confirmation passed every time
+  ([#21](https://github.com/tabnas/support/issues/21)). Only
+  `make publish-go` creates the third tag, so a dispatch-driven release
+  needs a maintainer hand-off until this is promoted.
+
+  The tag goes in the one list the already-released guard, the anchor
+  choice and the atomic push all read, so it is guarded and pushed with
+  the other two rather than beside them. The `go/*` case arm needs no
+  change: it is a prefix glob, so it gates the new tag behind the `go`
+  input already. `ts/test/release.test.js` asserts all of that against
+  this file, so the fix cannot be edited back out unnoticed.
+
 - **`workflows/rust.yml`** — the Rust gate: `ci/rust/run.sh` over the
   `rs/` crate and the `rs/adder/` crate (formatting, both lockfiles,
   build, tests, doctests, clippy), with `tabnas/parser` cloned as a
@@ -32,8 +53,10 @@ Both earlier staged workflows now live in `.github/workflows/`:
   `deps: "parser"`, plus the repo-specific `go-adder` job described below.
 - **`release.yml`** — publishes `@tabnas/support` to npm on a `ts/v*` tag
   push via GitHub OIDC Trusted Publishing. No `NPM_TOKEN`, no secret in
-  this repo. Byte-identical to the `release.yml` in `parser`, `json`,
-  `jsonic` and `expr` from `name:` onward.
+  this repo. It tracks the `release.yml` in `parser`, `json`, `jsonic`
+  and `expr` from `name:` onward, differing only in the package name its
+  `npm view` calls name. The staged copy above adds a second intended
+  difference, the nested module's tag, which no other repo needs.
 
 This directory exists because session credentials cannot write
 `.github/workflows/*` — see admin `DECISIONS.md` ADR-8. To change CI:

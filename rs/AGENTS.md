@@ -10,6 +10,7 @@ is specific to these two crates.
 |---|---|
 | `Cargo.toml`, `src/` | the `tabnas-support` crate (library `tabnas_support`): `escape.rs`, `spec.rs`, `expect.rs`, `runner.rs`, `register.rs`, `census.rs`, and `value.rs` (the fixture data model with its own JSON reader and writer) |
 | `tests/` | the shared `../test/spec/{util,census,register}` fixtures, the runner's and register's failure behaviour, the census tripwire, the version sites |
+| | `register/divergent.tsv` has an `rs` column beside `ts` and `go`, and `register_test.rs` reads it, so this crate is a runtime OF that register. It also runs the file as the other two columns, which is how one suite covers a mechanism three suites share. The runtimes list is held to the file's header, because an unnamed column is not a runtime and dropping one would pass. |
 | `adder/` | a SEPARATE crate, `tabnas-support-adder`, holding the adder grammar; needs the engine as a sibling checkout (`../../../parser/rs`) and runs `../test/spec/adder` through the runner |
 | `README.md` | the crate front page, prose-gated |
 
@@ -55,3 +56,8 @@ cd adder && cargo test --all-targets
 `make test-rs` from the repository root runs both crates; `ci/rust/run.sh`
 is the full gate (formatting, both lockfiles, clippy) and needs
 `tabnas/parser` checked out beside this repository.
+
+Run that script before calling Rust work done, because **nothing hosted
+runs it**: `ci/workflows/rust.yml` is staged and not promoted, so the
+`ci.yml` matrix covers `ts/`, `go/` and `go/adder/` and stops. A red
+Rust crate reaches `main` with a green tick until that changes.
