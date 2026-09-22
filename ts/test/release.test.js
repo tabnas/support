@@ -11,15 +11,21 @@
  * module unresolvable while every release-time check passed. Nothing
  * fails at release time; the breakage surfaces later, in a consumer.
  *
- * Session credentials cannot write `.github/workflows/*` (ADR-8), so the
- * file this asserts over is the STAGED copy in `ci/workflows/`, which a
- * maintainer promotes. Asserting the staged copy is the point: it is the
- * artifact this repo can change, and a staged fix that silently loses
- * the third tag is the same defect again.
+ * Session credentials cannot WRITE `.github/workflows/*` (ADR-8) -- but
+ * they can read it, and once a maintainer has promoted a workflow the
+ * deployed copy is the one that releases. So this reads whichever of the
+ * two exists, preferring the deployed copy:
  *
- * The deployed copy is deliberately NOT read here. It is out of this
- * repo's reach until promotion, so comparing against it would turn a
- * pending promotion into a red suite on main.
+ *   - before promotion, only `ci/workflows/release.yml` exists, and a
+ *     staged fix that silently loses the third tag is the same defect
+ *     again;
+ *   - after promotion the staged copy is DELETED by the rollout, and the
+ *     deployed file is both the thing that runs and the only one left.
+ *
+ * It used to read the staged copy alone, with a note that the deployed
+ * one was out of reach. Promotion made that note false and the suite red
+ * on main: `ci/` here now holds only README.md and rust/, so the path
+ * this asserted over had simply gone.
  */
 'use strict'
 
@@ -29,21 +35,32 @@ const Fs = require('node:fs')
 const Path = require('node:path')
 
 const REPO = Path.join(__dirname, '..', '..')
+const DEPLOYED = Path.join(REPO, '.github', 'workflows', 'release.yml')
 const STAGED = Path.join(REPO, 'ci', 'workflows', 'release.yml')
 
 const TAGS = ['ts/v$V', 'go/v$V', 'go/adder/v$V']
 
+// The deployed copy wins when it exists: it is what actually releases,
+// and after promotion the staged copy is gone. Returns null when neither
+// is present, which the first case below is what reports.
+function releaseWorkflow() {
+  for (const path of [DEPLOYED, STAGED]) {
+    if (Fs.existsSync(path)) return { path, src: Fs.readFileSync(path, 'utf8') }
+  }
+  return null
+}
+
 
 describe('release workflow', () => {
 
-  it('stages a release.yml to promote', () => {
+  it('has a release.yml, deployed or staged', () => {
     assert.ok(
-      Fs.existsSync(STAGED),
-      'ci/workflows/release.yml is missing: workflow changes are staged there (ADR-8)')
+      releaseWorkflow(),
+      'neither .github/workflows/release.yml nor ci/workflows/release.yml exists')
   })
 
   it('tags all three refs from one list', () => {
-    const src = Fs.readFileSync(STAGED, 'utf8')
+    const { src } = releaseWorkflow()
 
     // ONE list, not three greps. The already-released guard, the anchor
     // choice and the atomic push all read this loop, so a tag named
@@ -56,7 +73,7 @@ describe('release workflow', () => {
   })
 
   it('pushes the tag list atomically', () => {
-    const src = Fs.readFileSync(STAGED, 'utf8')
+    const { src } = releaseWorkflow()
 
     // Pushed one at a time, ts/v could land and go/adder/v fail, leaving
     // npm published and the nested module unreleased.
@@ -64,7 +81,7 @@ describe('release workflow', () => {
   })
 
   it('gates every go tag behind the go input', () => {
-    const src = Fs.readFileSync(STAGED, 'utf8')
+    const { src } = releaseWorkflow()
 
     // `go/*` matches go/adder/v0.3.5 as well as go/v0.3.5, so the third
     // tag needs no second case arm — but it does need this one to stay a
