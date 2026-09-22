@@ -98,9 +98,12 @@ version:
 # own entry in its Cargo.lock moves too, which is what the cargo metadata
 # runs below are for; that pair is checked by ci/rust/run.sh
 # (check_lock_version), not by the version test. Neither commits nor
-# tags: the crates depend on the engine by path, and crates.io does not
-# accept a path dependency, so they are not published. Only the
-# constants need to stay in step.
+# tags: neither crate is published. The adder crate cannot be, since it
+# takes the engine by path and crates.io refuses a path dependency, and
+# it says so with publish = false. The support crate carries no path
+# dependency and so is publishable in principle; it has simply never
+# been published, and consumers take it as a path dependency on a
+# sibling checkout. Only the constants need to stay in step.
 version-rs:
 	@test -n "$(V)" || (echo "Usage: make version-rs V=x.y.z" && exit 1)
 	sed -i.bak 's/^version = ".*"/version = "$(V)"/' rs/Cargo.toml rs/adder/Cargo.toml

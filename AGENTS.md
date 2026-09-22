@@ -34,9 +34,11 @@ sides already matched.
 
 ## Authority and alignment rules
 
-1. **TypeScript is canonical.** When TS and Go disagree on behaviour, TS
-   wins; change Go, and add a shared fixture when the behaviour is
-   expressible as input → output.
+1. **TypeScript is canonical.** When a port and TS disagree on
+   behaviour, TS wins; change the port, and add a shared fixture when the
+   behaviour is expressible as input → output. Go and Rust are both
+   ports, and neither is canonical for the other: a difference between
+   them is two questions about TS, not one about each other.
 2. **The Go support module and the Rust support crate take no
    dependencies.** Every tabnas repo depends on them, so anything they
    required would land in all of them — including the parser they are
@@ -48,9 +50,11 @@ sides already matched.
    only dependency is the optional, off-by-default `serde_json` feature.
 3. **A behaviour difference between the runtimes is a defect until it is
    documented.** The unavoidable ones are marked **⚠ differs** in
-   `doc/reference.md`; there are six, and each says why. Adding a seventh
-   without documenting it silently breaks the guarantee the package
-   exists to provide.
+   `doc/reference.md`, and each says why. There are **six** between
+   TypeScript and Go, and a further **six** in the Rust section, which
+   `rs/README.md` repeats. Adding a seventh to either set without
+   documenting it silently breaks the guarantee the package exists to
+   provide.
 
    Some differences are worth *code* to erase rather than a note: Go's
    `ParseExpect` re-reads an out-of-range number so `1e400` gives ±Inf
@@ -105,9 +109,10 @@ sides already matched.
 - **Every shared fixture must run in EVERY runtime**, and the census
   tests (`go/census_test.go`, `ts/test/census.test.js`,
   `rs/tests/census_test.rs`) enforce it.
-  `test/spec/adder/` is discovered by directory listing in both, so a
-  fixture added there runs in both automatically. `test/spec/util/` and
-  `test/spec/census/` cannot be — each file has its own column shape and
+  `test/spec/adder/` is discovered by directory listing in every
+  runtime, so a fixture added there runs everywhere automatically.
+  `test/spec/util/`, `test/spec/census/` and `test/spec/register/`
+  cannot be — each file has its own column shape and
   assertion, so each suite names the files it runs, and a fixture wired
   into one runtime only would otherwise be silent. The census is a
   static tripwire, not proof: it checks the fixture's name appears in
@@ -116,8 +121,8 @@ sides already matched.
 
 ## The census helpers
 
-`ts/src/census.ts` and `go/census.go` hold the coverage/parity
-tripwires a consuming repo runs over its own data:
+`ts/src/census.ts`, `go/census.go` and `rs/src/census.rs` hold the
+coverage/parity tripwires a consuming repo runs over its own data:
 
 - `codesInSpecDir(dir, opts)` / `CodesInSpecDir` walks a fixture
   directory with the shared loader and returns the error codes its
@@ -147,8 +152,9 @@ covered by the same census tests.
 
 ## The mini plugin
 
-`ts/src/adder.ts` and `go/adder/adder.go` hold the integer-addition
-grammar from the `@tabnas/parser` README (`1+2+3` => 6):
+`ts/src/adder.ts`, `go/adder/adder.go` and `rs/adder/src/lib.rs` hold
+the integer-addition grammar from the `@tabnas/parser` README
+(`1+2+3` => 6):
 
 ```
 val = add
@@ -156,8 +162,8 @@ add = NR [ PL add ]
 ```
 
 It is not a toy kept for its own sake — it is the end-to-end check that
-the two runtimes' utilities behave identically, run against the same
-`test/spec/adder/*.tsv` rows by both. Keep the two implementations the
+the three runtimes' utilities behave identically, run against the same
+`test/spec/adder/*.tsv` rows by each. Keep the three implementations the
 same shape: same rule names, same alternates, same declarative form.
 
 Keep it minimal. If it needs a feature to stay in step with a parser
@@ -241,9 +247,15 @@ in `go/` only, and `./...` does not cross a module boundary, so the
 would otherwise silently not run.
 
 Keep that job in step with the Makefile: `make test` and CI must cover
-the same three trees (`ts/`, `go/`, `go/adder/`). If a second tabnas repo
-ever grows a nested module, move the job upstream as a `go-test-dirs`
-input to `polyglot-ci.yml` rather than copying it.
+the same trees. They do not yet. `make test` covers five (`ts/`, `go/`,
+`go/adder/`, `rs/` and `rs/adder/`); CI covers the first three, because
+the Rust gate is `ci/workflows/rust.yml`, which is **staged and not
+promoted**. Until a maintainer promotes it, nothing hosted runs the Rust
+crates, and `ci/rust/run.sh` locally is the only thing that does.
+
+If a second tabnas repo ever grows a nested module, move the `go-adder`
+job upstream as a `go-test-dirs` input to `polyglot-ci.yml` rather than
+copying it.
 
 ## Releasing
 

@@ -361,11 +361,11 @@ describes.
 
 ## The divergence register
 
-Where the two ports of one grammar are known to **disagree**, and the
+Where the ports of one grammar are known to **disagree**, and the
 difference has been argued rather than repaired (ADR-14).
 
 ```js
-makeRegister({ parse, runtime: 'ts', runtimes: ['ts', 'go'] })
+makeRegister({ parse, runtime: 'ts', runtimes: ['ts', 'go', 'rs'] })
   .file(Path.join(specDir, 'divergent.tsv'))
 ```
 
@@ -373,8 +373,13 @@ makeRegister({ parse, runtime: 'ts', runtimes: ['ts', 'go'] })
 support.Register{
     Runner:   support.Runner{Parse: parse},
     Runtime:  "go",
-    Runtimes: []string{"ts", "go"},
+    Runtimes: []string{"ts", "go", "rs"},
 }.File(t, filepath.Join(specDir, "divergent.tsv"))
+```
+
+```rust
+Register::new(Runner::new(parse), "rs", &["ts", "go", "rs"])
+    .file(spec_dir.join("divergent.tsv"));
 ```
 
 The fixture has an `input` column and **one column per runtime**, each
@@ -382,11 +387,14 @@ written in the ordinary expected vocabulary (a JSON value, or
 `ERROR:<code>`):
 
 ```
-input	ts	go
-"\uD800"	"\ud800"	"\ufffd"
+input	ts	go	rs
+"\uD800"	"\ud800"	"\ufffd"	"\ufffd"
 ```
 
-Both suites run the same file and read different columns of it.
+Every suite runs the same file and reads a different column of it. A
+runtime whose cell repeats another's still belongs in the file: what the
+row records is that the columns are not all the same, not that this one
+is unique.
 
 ### Why this is more than a fixture
 
@@ -424,6 +432,12 @@ fix leaves it passing while it describes something that no longer happens.
   `issue` column is not silently read as a runtime that "agrees" with a
   sentence. Every named column must exist.
 - **A regression still reports as a mismatch**, not as a closed divergence.
+- **Converging with some but not all** of the other runtimes is reported
+  as PARTIALLY closed, and says to update this runtime's column rather
+  than to delete the row. The row still records a live disagreement
+  between the runtimes that have not converged, so deleting it would drop
+  that coverage. With two runtimes the case cannot arise; with three it
+  is the ordinary one.
 - **Comparison is the runner's**, unchanged. A register must not develop
   its own idea of what "equal" means.
 
@@ -659,6 +673,8 @@ feature adds `From<serde_json::Value>` for `Value` and the reverse.
 | `makeRegister(options)` | `Register::new(runner, runtime, &runtimes)` |
 | `register.spec(spec)`, `.file(path)` | `register.spec(&spec)`, `.file(path)`, `run_spec`, `run_file`, `check_row(&row, input)` |
 | `noDivergences(where)` | `no_divergences(where)` |
+| (no counterpart) | `report(outcome)`, which panics with the failures a `run_*` method returned, or with the error that stopped it |
+| `VERSION` | `VERSION` |
 | `codesInSpecDir(dir, options?)` | `codes_in_spec_dir(dir, &CensusOptions) -> Result<Vec<String>>` |
 | `compareCatalogues(a, b)` | `compare_catalogues(&a, &b) -> CatalogueDiff` |
 | `coverage(declared, exercised)` | `coverage(&declared, &exercised) -> CoverageReport` |
