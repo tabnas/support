@@ -59,7 +59,7 @@ sides already matched.
    runtime's own limits and are shared rather than papered over —
    integers beyond 2^53 are inexact in both, and making Go exact would
    make it *reject* rows TypeScript accepts.
-4. **The version is one number, in seven places, all seven checked.**
+4. **The version is one number, in eight places, seven of them checked.**
    `ts/package.json` is the source of truth. `ts/test/version.test.js`
    pins `ts/src/support.ts` to it; `go/version_test.go` reads it off
    disk and pins both `go/support.go` (`VERSION`) and the `require` on
@@ -74,7 +74,10 @@ sides already matched.
    at `v0.1.0` through the 0.1.1 release because nothing looked. Now
    something does.
 
-   `make version V=x.y.z` sets all seven; `make publish-go` refuses to
+   The eighth is `ts/package-lock.json`, which nothing asserts; see
+   [Releasing](#releasing) step 1.
+
+   `make version V=x.y.z` sets all eight; `make publish-go` refuses to
    run when `ts/` has not been bumped first.
 5. **This is test-support code and must never reach a release
    artifact.** In TypeScript that means a `devDependency` imported only
@@ -198,17 +201,20 @@ above.
 
 ### Bump the version with `make version V=x.y.z`
 
-The version appears in **four** places: `ts/package.json`,
-`ts/src/support.ts`, `go/support.go`, and the `require` on the support
-module in `go/adder/go.mod`. Moving some but not all of them leaves the
-repo **failing**, not merely inconsistent — the version test in each
-runtime compares against `ts/package.json`.
+The version appears in **eight** places: `ts/package.json`,
+`ts/package-lock.json`, `ts/src/support.ts`, `go/support.go`, the
+`require` on the support module in `go/adder/go.mod`, `rs/Cargo.toml`,
+`rs/src/lib.rs` and `rs/adder/Cargo.toml`. Moving some but not all of
+them leaves the repo **failing**, not merely inconsistent — the version
+test in each runtime compares against `ts/package.json`.
 
 That is not hypothetical. `v0.1.1` shipped with `go/support.go` still
 reading `0.1.0`, which turned `go test ./...` red on `main`; and because
 `publish-go` ran the tests as prerequisites, the target that would have
-fixed it refused to start. `make version` moves all four at once, and
-`publish-go` now tests after the bump rather than before.
+fixed it refused to start. `make version` moves all eight at once (the
+Rust three by way of `make version-rs`, the lockfile as a side effect of
+the `npm version` it runs), and `publish-go` now tests after the bump
+rather than before.
 
 ## CI
 
@@ -218,8 +224,15 @@ workflow changes are **staged in [`ci/workflows/`](ci/README.md)** and
 moved across out of band.
 
 `.github/workflows/ci.yml` and `.github/workflows/release.yml` are both
-promoted and live. `release.yml` is byte-identical to the other repos'
-from `name:` onward; keep it that way.
+promoted and live. `release.yml` tracks the fleet copy from `name:`
+onward with exactly two intended differences: the package name in its
+`npm view` calls, and the third release tag. Keep it to those two.
+
+The third tag is `go/adder/v$V`, and it is staged in
+[`ci/workflows/release.yml`](ci/README.md) rather than deployed. No
+other tabnas repo has a nested module, so no other copy needs it. See
+[Releasing](#releasing) for what the gap means for a release run before
+a maintainer promotes the staged file.
 
 Beyond the org-standard `polyglot-ci.yml` caller, `ci.yml` carries one
 repo-specific job, `go-adder`: the shared workflow runs `go test ./...`
@@ -255,24 +268,34 @@ accepts the publish. Pushing a tag by hand is the orchestrator's path
 
 The steps, in order:
 
-1. Bump all **five** version sites together — `ts/package.json`, `VERSION`
+1. Bump all **eight** version sites together — `ts/package.json`, `VERSION`
    in `ts/src/support.ts`, `const VERSION` in `go/support.go`,
-   `ts/package-lock.json` (regenerated, not hand-edited), and the
-   `github.com/tabnas/support/go` requirement in `go/adder/go.mod`.
-   That last one is easy to miss because `go/adder/` is a separate module:
-   it pins the version of this one, so leaving it behind fails
-   `TestVersionMatchesAdderRequire` in step 2, before you can merge.
-   `make version V=x.y.z` moves all of them — the lockfile included, as a
-   side effect of the `npm version` it runs.
+   `ts/package-lock.json` (regenerated, not hand-edited), the
+   `github.com/tabnas/support/go` requirement in `go/adder/go.mod`, and the
+   Rust three: `rs/Cargo.toml`, `VERSION` in `rs/src/lib.rs` and
+   `rs/adder/Cargo.toml`.
+   The `go/adder/go.mod` one is easy to miss because `go/adder/` is a
+   separate module: it pins the version of this one, so leaving it behind
+   fails `TestVersionMatchesAdderRequire` in step 2, before you can merge.
+   `make version V=x.y.z` moves all of them — the Rust three by way of
+   `make version-rs`, the lockfile as a side effect of the `npm version` it
+   runs.
 
-   Drift is caught for **four** of the five, not all: `ts/test/version.test.js`
-   pins `ts/src/support.ts` to `ts/package.json`, and `go/version_test.go`
-   pins `go/support.go` and the `go/adder/go.mod` require to it. Nothing
+   Drift is caught for **seven** of the eight, not all:
+   `ts/test/version.test.js` pins `ts/src/support.ts` to `ts/package.json`,
+   `go/version_test.go` pins `go/support.go` and the `go/adder/go.mod`
+   require to it, and `rs/tests/version_test.rs` pins `rs/Cargo.toml`,
+   `rs/src/lib.rs` and `rs/adder/Cargo.toml` to it. Nothing
    asserts the lockfile's own version field — `ts/test/enginepin.test.js`
    does read the lockfile, but only for the `@tabnas/parser` pin. So a bump
    made by hand instead of by `make version` can leave `ts/package-lock.json`
    behind with every test named here still green. Use `make version`; if you
    edit by hand anyway, check the lockfile yourself.
+
+   Each Rust crate's own entry in its `Cargo.lock` is a ninth and tenth
+   site, moved by any `cargo` command and checked by `ci/rust/run.sh`
+   (`check_lock_version`) rather than by a version test. `make version-rs`
+   runs `cargo metadata` for exactly that.
 2. Verify against the **published** dependencies rather than your checkout.
    The release runner installs fresh from the registry; a working tree
    usually does not, so reproduce that before believing anything:
@@ -367,17 +390,31 @@ The steps, in order:
    [ "$GH" = "$REL" ] || { echo "shipped $GH, not the $REL you cleared"; exit 1; }
    ```
 
-   **The dispatch does not create `go/adder/vX.Y.Z`.** `release.yml` writes
-   `ts/v$V` and `go/v$V` and nothing else — grep it for `adder` and you get
-   no hits. But this repo's own tag table says that third tag is required:
-   *"Without it the module is unresolvable, because Go finds a nested module
-   only under its own path prefix."* So a dispatch-only release publishes npm,
-   tags the main Go module, and leaves `github.com/tabnas/support/go/adder`
-   unresolvable at the new version. A session cannot push a tag (HTTP 403 on
-   tag refs), so this is the one step here that genuinely needs a maintainer:
-   `make publish-go V=x.y.z` pushes `go/v` and `go/adder/v` together. Hand
-   over explicitly, and do not call the release finished until all three
-   refs are present.
+   **The DEPLOYED dispatch does not create `go/adder/vX.Y.Z`.**
+   `.github/workflows/release.yml` writes `ts/v$V` and `go/v$V` and nothing
+   else — grep it for `adder` and you get no hits. But this repo's own tag
+   table says that third tag is required: *"Without it the module is
+   unresolvable, because Go finds a nested module only under its own path
+   prefix."* So a dispatch-only release publishes npm, tags the main Go
+   module, and leaves `github.com/tabnas/support/go/adder` unresolvable at
+   the new version. That is not hypothetical: v0.3.1 through v0.3.4 each
+   went out that way, and none of them has the tag —
+   [#21](https://github.com/tabnas/support/issues/21).
+
+   **The STAGED copy fixes it, and is waiting on promotion.**
+   `ci/workflows/release.yml` adds `go/adder/v$V` to the same list the
+   already-released guard, the anchor choice and the atomic push all read,
+   so once a maintainer promotes it with the admin
+   `rollout/apply-ci-folders.sh` script a dispatch tags all three.
+   `ts/test/release.test.js` holds the staged file to that, so the fix
+   cannot be lost to a later edit of the staged copy.
+
+   **Until it is promoted, hand over.** A session cannot push a tag (HTTP
+   403 on tag refs), so this is the one step here that genuinely needs a
+   maintainer: `make publish-go V=x.y.z` pushes `go/v` and `go/adder/v`
+   together. Hand over explicitly, and do not call the release finished
+   until all three refs are present. After promotion that hand-off is still
+   the repair path for a release that predates it.
 
    **Check `dist.attestations`, not just that the version exists.** The
    workflow fails *open* on an already-published version, so a version that

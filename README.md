@@ -175,8 +175,8 @@ including the parser it is used to test.
 ## Development
 
 ```bash
-make build   # both runtimes
-make test    # both runtimes, including the adder module
+make build   # all three runtimes
+make test    # all three runtimes, including both adder packages
 make vet     # go vet over both Go modules
 ```
 
@@ -185,10 +185,12 @@ publishes to npm via OIDC trusted publishing
 (`.github/workflows/release.yml`). Workflow changes are staged in
 [`ci/`](ci/README.md) first: a maintainer moves them into `.github/`.
 
-Releasing is three commands: `make version V=x.y.z` to move all four
-version sites, then `make tag-ts V=x.y.z` (npm, via OIDC trusted
+Releasing is three commands: `make version V=x.y.z` to move every
+version site, then `make tag-ts V=x.y.z` (npm, via OIDC trusted
 publishing) and `make publish-go V=x.y.z` (both Go modules). A plain
-`vX.Y.Z` tag publishes nothing. See [AGENTS.md](AGENTS.md#release).
+`vX.Y.Z` tag publishes nothing, and the nested `go/adder` module needs
+its own `go/adder/vX.Y.Z` tag or it stays unresolvable: `publish-go`
+pushes both. See [AGENTS.md](AGENTS.md#release).
 
 ## License
 

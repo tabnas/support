@@ -93,8 +93,11 @@ version:
 
 # Set the Rust version sites: make version-rs V=x.y.z
 #
-# Three sites, plus each crate's own entry in its Cargo.lock, which
-# rs/tests/version_test.rs holds to ts/package.json. Neither commits nor
+# Three sites: rs/Cargo.toml, rs/src/lib.rs and rs/adder/Cargo.toml, all
+# three held to ts/package.json by rs/tests/version_test.rs. Each crate's
+# own entry in its Cargo.lock moves too, which is what the cargo metadata
+# runs below are for; that pair is checked by ci/rust/run.sh
+# (check_lock_version), not by the version test. Neither commits nor
 # tags: the crates depend on the engine by path, and crates.io does not
 # accept a path dependency, so they are not published. Only the
 # constants need to stay in step.
