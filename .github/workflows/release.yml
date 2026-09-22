@@ -43,6 +43,21 @@
 # caches module versions immutably. A go/vX.Y.Z naming the wrong commit
 # is permanent; bump to the next patch rather than moving it.
 #
+# THE THIRD TAG IS THIS REPO'S ONE DIVERGENCE FROM THE FLEET COPY.
+# go/adder is a SEPARATE Go module, and Go finds a nested module only
+# under its own path prefix, so go/adder/vX.Y.Z is the whole of that
+# module's release. Without it github.com/tabnas/support/go/adder is
+# unresolvable at the version, which is what happened to v0.3.1 through
+# v0.3.4: npm published, ts/v and go/v landed, the confirmation passed,
+# and the nested module was left behind for four consecutive releases
+# (tabnas/support#21). Nothing else in this file changes. The go/* case
+# arm below already gates the new tag behind the `go` input, because it
+# is a prefix glob; the atomic push already covers whatever the loop
+# collects; and TestVersionMatchesAdderRequire fails the bump PR if
+# go/adder/go.mod drifts, so the tag cannot name a commit whose adder
+# pins the wrong support version. No other tabnas repo has a nested
+# module, so this stays here rather than moving upstream.
+#
 # Actions are pinned to full commit SHAs with the corresponding release
 # as a trailing comment, on the lowest major whose `runs.using` is
 # node24 (ADR-16).
@@ -53,7 +68,7 @@ on:
   workflow_dispatch:
     inputs:
       go:
-        description: 'Also tag the Go module (go/v<version>)'
+        description: 'Also tag the Go modules (go/v<version> and go/adder/v<version>)'
         type: boolean
         default: true
   push:
@@ -106,7 +121,7 @@ jobs:
         run: |
           V="${{ steps.v.outputs.version }}"
           MISSING=""; ANCHOR=""
-          for T in "ts/v$V" "go/v$V"; do
+          for T in "ts/v$V" "go/v$V" "go/adder/v$V"; do
             case "$T" in
               go/*) [ "${{ inputs.go }}" = "true" ] || continue ;;
             esac
