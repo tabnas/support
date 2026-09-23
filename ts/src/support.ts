@@ -42,7 +42,7 @@
  * from any of them.
  */
 
-export const VERSION = '0.3.4'
+export const VERSION = '0.3.5'
 
 export { unescape, escape } from './escape'
 

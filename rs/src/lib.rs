@@ -49,7 +49,7 @@ mod value;
 
 /// The release version, kept in step with `ts/package.json`. See
 /// `tests/version_test.rs`, which fails the build when they drift.
-pub const VERSION: &str = "0.3.4";
+pub const VERSION: &str = "0.3.5";
 
 pub use census::{
     codes_in_spec_dir, compare_catalogues, coverage, CatalogueDiff, CensusOptions, CoverageReport,
