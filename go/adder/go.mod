@@ -22,8 +22,8 @@ go 1.24.7
 // Bump it with the support module's version at every release
 // (`make version`).
 require (
-	github.com/tabnas/parser/go v0.9.0
-	github.com/tabnas/support/go v0.3.4
+	github.com/tabnas/parser/go v0.12.2
+	github.com/tabnas/support/go v0.3.5
 )
 
 replace github.com/tabnas/support/go => ../

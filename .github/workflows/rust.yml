@@ -36,7 +36,7 @@ jobs:
       # Checked out into a NAMED directory: rs/adder/Cargo.toml takes the
       # engine as `path = "../../../parser/rs"`, so the engine has to sit
       # beside this checkout rather than inside it.
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           path: support
 
