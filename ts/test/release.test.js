@@ -152,6 +152,26 @@ describe('release workflow', () => {
 })
 
 
+// Markdown pages under `dir`, as repo-relative paths with `/` separators.
+// Dependencies, build output and Vale's downloaded styles are not this
+// repository's prose. `.git` is skipped by name, since it is a directory
+// in a clone and a file in a worktree.
+const SKIP = new Set(['.git', 'node_modules', 'dist', 'target', '.vale'])
+
+function markdownPages(dir) {
+  const found = []
+  for (const entry of Fs.readdirSync(dir, { withFileTypes: true })) {
+    if (SKIP.has(entry.name)) continue
+    const full = Path.join(dir, entry.name)
+    if (entry.isDirectory()) found.push(...markdownPages(full))
+    else if (entry.name.endsWith('.md')) {
+      found.push(Path.relative(REPO, full).split(Path.sep).join('/'))
+    }
+  }
+  return found
+}
+
+
 describe('release documentation', () => {
 
   // A per-release adder tag, in any of the spellings these pages use for
@@ -160,7 +180,21 @@ describe('release documentation', () => {
   // one is an instruction, and there is no such tag to create or check.
   const PER_RELEASE_ADDER_TAG = /go\/adder\/v(?:\$|X\.Y\.Z|<)/
 
-  for (const page of ['AGENTS.md', 'README.md', 'ci/README.md', 'Makefile']) {
+  // Every Markdown page in the repository, found by walking it rather
+  // than listed by hand: a hand list is the page someone forgets, and
+  // go/README.md was that page in this suite's first draft. Plus the
+  // Makefile, whose publish-go is the other way a tag gets made.
+  const pages = [...markdownPages(REPO), 'Makefile'].sort()
+
+  it('finds the pages it has to check', () => {
+    // A walk that finds nothing would pass every per-page check below.
+    for (const page of ['AGENTS.md', 'README.md', 'ci/README.md',
+      'go/README.md', 'doc/reference.md', 'Makefile']) {
+      assert.ok(pages.includes(page), page + ' was not found by the walk')
+    }
+  })
+
+  for (const page of pages) {
     it(page + ' describes no per-release go/adder tag', () => {
       const src = Fs.readFileSync(Path.join(REPO, page), 'utf8')
       const hit = src.split('\n').find((line) => PER_RELEASE_ADDER_TAG.test(line))

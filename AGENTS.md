@@ -198,8 +198,8 @@ backfill ([#21](https://github.com/tabnas/support/issues/21)). Because
 the repository is public, Go can still fetch the module as a
 pseudo-version; that is Go's behaviour, not a release.
 `ts/test/release.test.js` fails if `release.yml` names the module
-outside a comment, or if this guide, the READMEs or the Makefile
-describe a per-release adder tag.
+outside a comment, or if any Markdown page in the repository or the
+Makefile describes a per-release adder tag.
 
 The whole release is three commands:
 
