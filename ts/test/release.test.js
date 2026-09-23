@@ -1,30 +1,31 @@
 /* Copyright (c) 2026 tabnas, MIT License */
 
-/* release.test.js — the release tags THREE refs, and the staged workflow
- * is where that is true.
+/* release.test.js — the release tags TWO refs, `ts/v` and `go/v`, and
+ * never a `go/adder` one.
  *
- * `go/adder/` is a separate module, and Go finds a nested module only
- * under its own path prefix, so `go/adder/vX.Y.Z` is what makes
- * `github.com/tabnas/support/go/adder` resolvable at all. The deployed
- * workflow created `ts/v` and `go/v` and stopped there, so four
- * consecutive dispatch-driven releases (0.3.1 to 0.3.4) left the nested
- * module unresolvable while every release-time check passed. Nothing
- * fails at release time; the breakage surfaces later, in a consumer.
+ * `go/adder/` is a separate Go module, but it is a PRIVATE INTERNAL TEST
+ * MODULE: never published and never tagged, by the maintainer's decision
+ * (admin#19, recorded in admin/publish.sh). Only this repository consumes
+ * it, and CI builds it from source. For a while this file asserted the
+ * opposite: #27 taught the workflow a third tag, `go/adder/v$V`, and this
+ * suite held it there. #21 is where that was reversed. The two adder tags
+ * that exist, v0.2.0 and v0.3.0, predate the decision and stay, because a
+ * Go tag is immutable once the proxy has served it; the rule is only that
+ * nothing creates another.
  *
- * Session credentials cannot WRITE `.github/workflows/*` (ADR-8) -- but
- * they can read it, so BOTH copies are checked, and neither stands in
- * for the other:
+ * A decision that lives only in prose gets "fixed" back by the next person
+ * who reads the nested module as a gap, which is how the third tag arrived
+ * in the first place. So the suite enforces it: the tag list is exactly
+ * the fleet's two, nothing else in the workflow tags or pushes, and the
+ * release docs stop describing a per-release adder tag.
  *
- *   - before promotion, only `ci/workflows/release.yml` exists, and a
- *     staged fix that silently loses the third tag is the same defect
- *     again;
- *   - after promotion the staged copy is DELETED by the rollout, and the
- *     deployed file is both the thing that runs and the only one left.
- *
- * It used to read the staged copy alone, with a note that the deployed
- * one was out of reach. Promotion made that note false and the suite red
- * on main: `ci/` here now holds only README.md and rust/, so the path
- * this asserted over had simply gone.
+ * Both copies of the workflow are checked when both exist. The deployed
+ * `.github/workflows/release.yml` is required: it is the one that runs. A
+ * candidate staged in `ci/workflows/release.yml` (the ADR-8 route, for
+ * credentials that cannot write workflow files) is optional, and held to
+ * the same rules, since a candidate that brings the adder tag back is the
+ * deployed file's defect the day it is promoted. Promotion deletes the
+ * staged copy, which is why neither path may be assumed to exist alone.
  */
 'use strict'
 
@@ -37,7 +38,7 @@ const REPO = Path.join(__dirname, '..', '..')
 const DEPLOYED = Path.join(REPO, '.github', 'workflows', 'release.yml')
 const STAGED = Path.join(REPO, 'ci', 'workflows', 'release.yml')
 
-const TAGS = ['ts/v$V', 'go/v$V', 'go/adder/v$V']
+const TAGS = ['ts/v$V', 'go/v$V']
 
 // Every copy that exists, deployed first. The deployed one is required;
 // a staged candidate is optional and held to the same rules.
@@ -65,6 +66,19 @@ function forEachCopy(check) {
   }
 }
 
+// The workflow with its comments removed: whole-line `#` comments and
+// trailing ` # ...` ones (the action pins carry their release that way).
+// The header explains, in prose, why there is no adder tag, and it has to
+// be able to name the module to do that. What must not name it is
+// anything that runs.
+function executable(src) {
+  return src
+    .split('\n')
+    .filter((line) => !/^\s*#/.test(line))
+    .map((line) => line.replace(/\s+#.*$/, ''))
+    .join('\n')
+}
+
 
 describe('release workflow', () => {
 
@@ -77,35 +91,61 @@ describe('release workflow', () => {
       '.github/workflows/release.yml is missing: a staged candidate cannot release')
   })
 
-  it('tags all three refs from one list', () => {
+  it('tags ts/v and go/v, from one list', () => {
     forEachCopy((src) => {
 
-      // ONE list, not three greps. The already-released guard, the anchor
+      // ONE list, not greps. The already-released guard, the anchor
       // choice and the atomic push all read this loop, so a tag named
-      // anywhere else would be tagged without being guarded.
-      const loop = src.match(/^\s*for T in ([^\n]*?); do$/m)
-      assert.ok(loop, 'no `for T in ...; do` tag list')
+      // anywhere else would be tagged without being guarded. (The tag
+      // step's own `for T in ${{ steps.tags.outputs.missing }}` iterates
+      // what this list decided; it names no tag, so it is not a list.)
+      const loops = src.match(/^\s*for T in ("[^\n]*?); do$/gm)
+      assert.ok(loops, 'no `for T in "..."; do` tag list')
+      assert.equal(loops.length, 1, 'more than one literal tag list: ' + loops.join(' / '))
 
-      const tags = loop[1].match(/"([^"]+)"/g).map((s) => s.slice(1, -1))
+      const list = loops[0].match(/for T in ([^\n]*?); do$/)[1]
+      const tags = list.match(/"([^"]+)"/g).map((s) => s.slice(1, -1))
       assert.deepEqual(tags, TAGS)
+    })
+  })
+
+  it('creates no go/adder tag: the nested module is private', () => {
+    forEachCopy((src) => {
+      const code = executable(src)
+
+      // Not in the list, not in the input description, not in a second
+      // tagging step: nothing that runs names the module at all.
+      assert.doesNotMatch(
+        code, /adder/i,
+        'release.yml names go/adder outside a comment; the module is never tagged (admin#19, #21)')
+
+      // And there is no other way to make a tag. Every `git tag` and
+      // `git push` in the file is the loop's, so a nested module cannot
+      // be tagged by a step that builds its name some other way.
+      assert.deepEqual(
+        code.match(/\bgit tag\b[^\n]*/g),
+        ['git tag "$T" "${{ steps.tags.outputs.anchor }}"'])
+      assert.deepEqual(
+        code.match(/\bgit push\b[^\n]*/g),
+        ['git push --atomic origin ${{ steps.tags.outputs.missing }}'])
     })
   })
 
   it('pushes the tag list atomically', () => {
     forEachCopy((src) => {
 
-      // Pushed one at a time, ts/v could land and go/adder/v fail, leaving
-      // npm published and the nested module unreleased.
+      // Pushed one at a time, ts/v could land and go/v fail, leaving npm
+      // published and the Go module unreleased, and the "every tag
+      // exists" guard is then no help: one of the two still does not.
       assert.match(src, /git push --atomic origin \$\{\{ steps\.tags\.outputs\.missing \}\}/)
     })
   })
 
-  it('gates every go tag behind the go input', () => {
+  it('gates the go tag behind the go input', () => {
     forEachCopy((src) => {
 
-      // `go/*` matches go/adder/v0.3.5 as well as go/v0.3.5, so the third
-      // tag needs no second case arm — but it does need this one to stay a
-      // prefix glob rather than becoming an exact match.
+      // A prefix glob, as in the fleet copy, so `go: false` publishes and
+      // tags ts/v alone.
       assert.match(src, /go\/\*\)\s*\[ "\$\{\{ inputs\.go \}\}" = "true" \] \|\| continue/)
     })
   })
@@ -114,15 +154,31 @@ describe('release workflow', () => {
 
 describe('release documentation', () => {
 
-  // A guide that describes a two-tag release is the process defect this
-  // issue found, written down.
-  for (const page of ['AGENTS.md', 'README.md']) {
-    it(page + ' names go/adder/v in the confirmation', () => {
+  // A per-release adder tag, in any of the spellings these pages use for
+  // "the version being released". A concrete version (the historical
+  // go/adder/v0.2.0 and v0.3.0) is a fact and may be named; a templated
+  // one is an instruction, and there is no such tag to create or check.
+  const PER_RELEASE_ADDER_TAG = /go\/adder\/v(?:\$|X\.Y\.Z|<)/
+
+  for (const page of ['AGENTS.md', 'README.md', 'ci/README.md', 'Makefile']) {
+    it(page + ' describes no per-release go/adder tag', () => {
       const src = Fs.readFileSync(Path.join(REPO, page), 'utf8')
-      if (!/confirm/i.test(src)) return
-      assert.ok(
-        src.includes('go/adder/v$V') || src.includes('go/adder/vX.Y.Z'),
-        page + ' describes the release without the nested module tag')
+      const hit = src.split('\n').find((line) => PER_RELEASE_ADDER_TAG.test(line))
+      assert.equal(hit, undefined, page + ' still describes a go/adder release tag: ' + hit)
     })
   }
+
+  // The confirmation script in the release steps checks the tags the
+  // workflow creates. A script that checks a third tag fails every
+  // release; one that checks fewer passes a release that is missing one.
+  it('AGENTS.md confirms the same tags the workflow creates', () => {
+    const src = Fs.readFileSync(Path.join(REPO, 'AGENTS.md'), 'utf8')
+    const loops = src.match(/^\s*for T in ([^\n]*?); do$/gm)
+    assert.ok(loops, 'AGENTS.md has no `for T in ...; do` confirmation loop')
+    for (const loop of loops) {
+      const tags = loop.match(/for T in ([^\n]*?); do$/)[1]
+        .match(/"([^"]+)"/g).map((s) => s.slice(1, -1))
+      assert.deepEqual(tags, TAGS, 'AGENTS.md: ' + loop.trim())
+    }
+  })
 })

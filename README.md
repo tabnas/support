@@ -168,6 +168,10 @@ support module and the support crate have no dependencies and never
 will: every tabnas repo depends on one of them, so anything they
 required would land in all of them, including the parser they are used
 to test. The grammar needs the parser, which is why it is split out.
+Both are private to this repository: the Go module is never tagged and
+the Rust crate is never published, so neither is something to depend
+on. The TypeScript plugin ships in the npm package as
+`@tabnas/support/adder`.
 
 ## Documentation
 
@@ -191,10 +195,10 @@ publishes to npm via OIDC trusted publishing
 
 Releasing is three commands: `make version V=x.y.z` to move every
 version site, then `make tag-ts V=x.y.z` (npm, via OIDC trusted
-publishing) and `make publish-go V=x.y.z` (both Go modules). A plain
-`vX.Y.Z` tag publishes nothing, and the nested `go/adder` module needs
-its own `go/adder/vX.Y.Z` tag or it stays unresolvable: `publish-go`
-pushes both. See [AGENTS.md](AGENTS.md#release).
+publishing) and `make publish-go V=x.y.z` (the `go/vX.Y.Z` tag). A plain
+`vX.Y.Z` tag publishes nothing. The nested `go/adder` module gets no tag
+at all. It stays a private test module that this repository builds from
+source and never releases. See [AGENTS.md](AGENTS.md#release).
 
 ## License
 

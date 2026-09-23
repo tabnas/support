@@ -631,7 +631,8 @@ of any length runs in one frame and every iteration's parent is still
 The Go plugin is a separate module. The support module is a dependency of
 every tabnas repo, so it carries none of its own; the grammar that
 exercises it needs the parser, and splitting them is what lets both facts
-hold.
+hold. That module is private to this repository, never tagged or
+published: only this repository's own tests import it.
 
 > **⚠ differs.** TypeScript has one number type; Go's `#NR` token value is
 > widened to `float64` by an unexported helper, so the total is one type

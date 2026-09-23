@@ -5,6 +5,8 @@
 # dependencies, and the grammar that exercises it needs the parser — so
 # `go test ./...` in go/ does not reach it and it is run explicitly here.
 # rs/adder is a separate crate for the same reason, and is run the same way.
+# Both are private test code: go/adder is never tagged and rs/adder is
+# never published (see publish-go and version-rs below).
 
 .PHONY: all build test clean build-ts build-go build-rs test-ts test-go test-go-adder \
         test-rs clean-ts clean-go clean-rs publish-ts publish-go tag-ts tags-go reset \
@@ -149,11 +151,21 @@ clean-rs:
 	cd rs && cargo clean
 	cd rs/adder && cargo clean
 
-# Publish the Go modules: make publish-go V=x.y.z
-# Injects V into the Go VERSION const, commits, tags BOTH modules, and
-# (when gh is available) creates a GitHub release.
+# Publish the Go module: make publish-go V=x.y.z
+# Injects V into the Go VERSION const and the go/adder require, commits,
+# tags go/vX.Y.Z, and (when gh is available) creates a GitHub release.
 #
-# NOTE: this rewrites go/support.go ONLY. It does NOT touch
+# Only the support module is tagged. go/adder is a PRIVATE INTERNAL TEST
+# MODULE — never tagged, never published, by the maintainer's decision
+# (admin#19; tabnas/support#21) — so its require moves with the release,
+# keeping it building against this version, and nothing else happens to
+# it. Its two old tags, v0.2.0 and v0.3.0, predate the decision and stay:
+# a Go tag is immutable once the proxy has served it. Do not add a tag
+# for it here or in .github/workflows/release.yml; ts/test/release.test.js
+# fails if either describes one.
+#
+# NOTE: this rewrites the Go side ONLY (go/support.go and the
+# go/adder/go.mod require). It does NOT touch
 # ts/src/support.ts or ts/package.json — keeping the two runtimes in sync
 # is the release orchestrator's job, and the version tests in both
 # runtimes fail the build if they ever drift.
@@ -185,23 +197,19 @@ publish-go:
 	# version is already committed — which is the NORMAL case now that
 	# `make version` sets all four sites in one go — both seds are
 	# no-ops, `git commit` exits 1 on "nothing to commit", and make would
-	# abort before creating either tag. That would fail exactly when the
+	# abort before creating the tag. That would fail exactly when the
 	# release is otherwise ready.
 	git diff --cached --quiet || git commit -m "go: v$(V)"
-	# Both modules are tagged. go/adder is a nested module, so Go tooling
-	# can only discover its releases under go/adder/vX.Y.Z — tagging go/
-	# alone would leave the documented adder package unresolvable.
-	#
 	# A tag already at HEAD is left alone rather than treated as an
 	# error, because a HALF-DONE release is a real state that this target
-	# has to be able to finish: 0.1.1 shipped with go/v0.1.1 tagged and
-	# go/adder/v0.1.1 missing, and `git tag` failing on the first of the
-	# two meant the second could never be created.
+	# has to be able to finish: a run whose push failed after `git tag`
+	# succeeded leaves the tag behind locally, and failing on it would
+	# mean the push could never be retried.
 	#
 	# A tag that exists on a DIFFERENT commit is still a hard stop. That
 	# means the version was released and the code has moved since, so the
 	# answer is a new version, not a moved tag.
-	@for T in go/v$(V) go/adder/v$(V); do \
+	@T=go/v$(V); \
 	  if git rev-parse -q --verify "refs/tags/$$T" >/dev/null; then \
 	    if [ "$$(git rev-parse "refs/tags/$$T^{commit}")" != "$$(git rev-parse HEAD)" ]; then \
 	      echo "tag $$T exists on a different commit — bump the version instead"; \
@@ -210,9 +218,8 @@ publish-go:
 	    echo "tag $$T already at HEAD — leaving it"; \
 	  else \
 	    git tag "$$T"; \
-	  fi; \
-	done
-	git push origin main go/v$(V) go/adder/v$(V)
+	  fi
+	git push origin main go/v$(V)
 	@command -v gh >/dev/null 2>&1 && gh release create go/v$(V) --title "go/v$(V)" --notes "Go module release v$(V)" || true
 
 # List published Go module tags, newest first.
