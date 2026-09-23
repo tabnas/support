@@ -26,7 +26,7 @@ sides already matched.
 |---|---|
 | `ts/` | **Canonical** TypeScript package (`@tabnas/support`). Source in `src/`: `escape.ts`, `spec.ts`, `expect.ts`, `runner.ts`, `census.ts`, the `support.ts` entry point, and `adder.ts`. |
 | `go/` | Go port. Module `github.com/tabnas/support/go`, **no dependencies**. Same files: `escape.go`, `spec.go`, `expect.go`, `runner.go`, `census.go`, plus `support.go` for the package doc, `VERSION` and the pointer helpers. |
-| `go/adder/` | **Separate module** (`github.com/tabnas/support/go/adder`) holding the adder grammar, which needs the parser. |
+| `go/adder/` | **Separate module** (`github.com/tabnas/support/go/adder`) holding the adder grammar, which needs the parser. **Private**: an internal test module, never tagged or published (see [Release](#release)). |
 | `rs/` | Rust port. Crate `tabnas-support` (library `tabnas_support`), **no required dependencies**: `escape.rs`, `spec.rs`, `expect.rs`, `runner.rs`, `register.rs`, `census.rs`, plus `value.rs`, the fixture data model with its own JSON reader and writer. See [`rs/AGENTS.md`](rs/AGENTS.md). |
 | `rs/adder/` | **Separate crate** (`tabnas-support-adder`) holding the adder grammar, which needs the engine as a sibling checkout (`../../../parser/rs`). |
 | `test/spec/` | Shared `.tsv` fixtures. See [`test/AGENTS.md`](test/AGENTS.md). |
@@ -73,10 +73,11 @@ sides already matched.
 
    That fourth site is the one a stale version breaks nothing local: a
    `replace` covers it for anyone building in this repo, but a `replace`
-   in a dependency module is ignored by whoever imports it, so an
-   external `go get` resolves the version named there and fails. It sat
-   at `v0.1.0` through the 0.1.1 release because nothing looked. Now
-   something does.
+   in a dependency module is ignored by whoever imports it. No release
+   tags the adder module, but the repository is public, so Go can still
+   fetch any commit of it as a pseudo-version, and that fetch resolves
+   the version named there and fails. It sat at `v0.1.0` through the
+   0.1.1 release because nothing looked. Now something does.
 
    The eighth is `ts/package-lock.json`, which nothing asserts; see
    [Releasing](#releasing) step 1.
@@ -172,20 +173,40 @@ belongs in the parser's own docs instead.
 
 ## Release
 
-Three tags, and each one means something different:
+Two tags, and each one means something different:
 
 | Tag | Effect |
 |---|---|
 | `ts/vX.Y.Z` | CI publishes `@tabnas/support` to npm via OIDC trusted publishing (`.github/workflows/release.yml`). No token is involved, and none is stored in this repo. |
 | `go/vX.Y.Z` | Nothing runs — the Go module proxy serves the module from the tag directly. |
-| `go/adder/vX.Y.Z` | Same, for the nested adder module. Without it the module is unresolvable, because Go finds a nested module only under its own path prefix. |
+
+**`go/adder` gets no tag.** It is a private internal test module, never
+tagged and never published, by the maintainer's decision (admin#19,
+recorded beside the nested-module handling in `admin/publish.sh`). Only
+this repository consumes it: `make test` builds it through its
+`replace github.com/tabnas/support/go => ../`, and CI's `go-adder` job
+through a workspace, both from source. A release moves the support
+`require` in `go/adder/go.mod` (below), so the module keeps building
+against the version being released, and does nothing else to it.
+
+Two adder tags exist from before that decision, `go/adder/v0.2.0`
+(`ef40e438`) and `go/adder/v0.3.0` (`a5df8829`). They stay where they
+are: a Go tag is immutable once proxy.golang.org has served it, so
+deleting one would only make Git and the proxy disagree. Do not create
+another, and do not read the missing ones for v0.3.1 onward as a gap to
+backfill ([#21](https://github.com/tabnas/support/issues/21)). Because
+the repository is public, Go can still fetch the module as a
+pseudo-version; that is Go's behaviour, not a release.
+`ts/test/release.test.js` fails if `release.yml` names the module
+outside a comment, or if any Markdown page in the repository or the
+Makefile describes a per-release adder tag.
 
 The whole release is three commands:
 
 ```bash
 make version V=x.y.z    # all four version sites; commit and merge to main
 make tag-ts V=x.y.z     # pushes ts/vX.Y.Z — CI publishes to npm with provenance
-make publish-go V=x.y.z # pushes go/vX.Y.Z and go/adder/vX.Y.Z
+make publish-go V=x.y.z # pushes go/vX.Y.Z (and nothing for go/adder)
 ```
 
 Both tag targets tolerate a tag already at HEAD, so a half-done release
@@ -230,15 +251,11 @@ workflow changes are **staged in [`ci/workflows/`](ci/README.md)** and
 moved across out of band.
 
 All four workflows are promoted and live: `ci.yml`, `release.yml`,
-`rust.yml` and `docs.yml`. `release.yml` tracks the fleet copy from
-`name:` onward with exactly two intended differences: the package name
-in its `npm view` calls, and the third release tag. Keep it to those
-two.
-
-The third tag is `go/adder/v$V`, in the deployed tag list. No other
-tabnas repo has a nested module, so no other copy needs it. See
-[Releasing](#releasing) for the releases that went out before it was
-deployed.
+`rust.yml` and `docs.yml`. `release.yml` tracks the fleet copy (the one
+in `json`, `jsonic` and `expr`) from `name:` onward with exactly one
+intended difference: the package name in its `npm view` calls. Keep it
+to that one. In particular it creates the fleet's two tags and no third
+for `go/adder`, which is private (see [Release](#release)).
 
 Beyond the org-standard `polyglot-ci.yml` caller, `ci.yml` carries one
 repo-specific job, `go-adder`: the shared workflow runs `go test ./...`
@@ -396,7 +413,7 @@ The steps, in order:
    npm view @tabnas/support@$V dist.attestations   # empty = unattested
    GH=$(npm view @tabnas/support@$V gitHead)
    [ -n "$GH" ] || { echo "npm records no gitHead for $V"; exit 1; }
-   for T in "ts/v$V" "go/v$V" "go/adder/v$V"; do
+   for T in "ts/v$V" "go/v$V"; do
      S=$(git ls-remote origin "refs/tags/$T" | cut -f1)
      [ -n "$S" ] || { echo "missing tag $T"; exit 1; }
      [ "$S" = "$GH" ] || { echo "$T is $S, but npm shipped $GH"; exit 1; }
@@ -404,22 +421,11 @@ The steps, in order:
    [ "$GH" = "$REL" ] || { echo "shipped $GH, not the $REL you cleared"; exit 1; }
    ```
 
-   **The dispatch creates `go/adder/vX.Y.Z` too.**
-   `.github/workflows/release.yml` puts `go/adder/v$V` in the same list the
-   already-released guard, the anchor choice and the atomic push all read,
-   and its `go/*` case arm gates that tag behind the `go` input along with
-   `go/v$V`. `ts/test/release.test.js` holds the deployed file, and any
-   staged candidate, to that.
-
-   **The releases before it did not.** v0.3.1 through v0.3.4 went out with
-   `ts/v` and `go/v` and no adder tag: v0.3.1 to v0.3.3 by the
-   orchestrator's `ts/v*` tag push, on which this workflow writes no tags
-   and `admin/publish.sh` pushes only `go/v` and `ts/v`, and v0.3.4 by a
-   dispatch of the workflow as it stood before the adder tag was added. So
-   `github.com/tabnas/support/go/adder` has tagged versions v0.2.0 and
-   v0.3.0 and none later; [#21](https://github.com/tabnas/support/issues/21)
-   tracks whether to backfill. A session cannot push a tag (HTTP 403 on
-   tag refs), so any backfill is a maintainer's.
+   **Two tags, not three.** `go/adder` is private and never tagged (see
+   [Release](#release)), so neither the dispatch nor `make publish-go`
+   creates an adder tag and this script does not look for one.
+   `ts/test/release.test.js` holds the workflow's tag list, and this loop,
+   to exactly `ts/v` and `go/v`.
 
    **Check `dist.attestations`, not just that the version exists.** The
    workflow fails *open* on an already-published version, so a version that
@@ -453,15 +459,13 @@ The steps, in order:
    tag that is not `$GH` is wrong, and the two are not equally
    recoverable. A wrong `ts/v$V` simply moves: npm resolves from the
    registry, so the tag is a signpost and nothing reads it. A wrong
-   `go/v$V` or `go/adder/v$V` does not — they are two modules, and each is
-   spent on its own. `proxy.golang.org` caches a module version's content
+   `go/v$V` does not. `proxy.golang.org` caches a module version's content
    immutably, so once anything has fetched `v$V` that content is what
    consumers get for good, and a corrected tag only makes Git and the
    proxy disagree — and you cannot find out whether it has been fetched
    without causing it, because asking the proxy is itself a fetch. Leave
    that tag where it is and release the next patch from the right commit,
-   carrying `retract v$V` in the affected module's `go.mod` — `go/go.mod`,
-   `go/adder/go.mod`, or both: the cached content stays,
+   carrying `retract v$V` in its `go/go.mod`: the cached content stays,
    but `go get` stops selecting the bad version and reports it as
    retracted.
 

@@ -132,6 +132,10 @@ a plugin in the separate [`adder`](adder/) module. It is this module's
 end-to-end check: `adder/adder_test.go` and `ts/test/adder.test.js` run it
 against the same `test/spec/adder/*.tsv` rows in both runtimes.
 
+The `adder` module is private to this repository. Nothing tags or
+publishes it, so there is no version of it to `go get`. The example shows
+how its own tests use it.
+
 ## API
 
 Full signatures, and the TypeScript equivalents, are in the

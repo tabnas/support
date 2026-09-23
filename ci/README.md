@@ -20,21 +20,19 @@ All four live in `.github/workflows/`:
   path, which also writes the release tags) or on a `ts/v*` tag push
   (the orchestrator's path, where the tag steps do nothing). No
   `NPM_TOKEN`, no secret in this repo. It tracks the `release.yml` in
-  `parser`, `json`, `jsonic` and `expr` from `name:` onward, differing
-  in the package name its `npm view` calls name and in one more tag,
-  `go/adder/v$V`, which no other repo needs.
+  `json`, `jsonic` and `expr` from `name:` onward, differing only in the
+  package name its `npm view` calls name, and so creates the same two
+  tags they do: `ts/v$V` and `go/v$V`.
 
-  `go/adder` is a separate Go module, and Go finds a nested module only
-  under its own path prefix, so `go/adder/vX.Y.Z` is the whole of that
-  module's release. The tag goes in the one list the already-released
-  guard, the anchor choice and the atomic push all read, so it is
-  guarded and pushed with the other two rather than beside them. The
-  `go/*` case arm gates it behind the `go` input, because it is a prefix
-  glob. `ts/test/release.test.js` asserts all of that against the
-  deployed file, and against a staged candidate whenever there is one.
-
-  The releases before it was deployed, v0.3.1 through v0.3.4, have no
-  adder tag ([#21](https://github.com/tabnas/support/issues/21)).
+  It creates no tag for `go/adder`. That nested module is a private
+  internal test module, never tagged or published, by the maintainer's
+  decision (admin#19); the `go-adder` job below builds it from source,
+  and nothing outside this repository consumes it. Its two old tags,
+  v0.2.0 and v0.3.0, predate the decision and stay, since a Go tag is
+  immutable once the proxy has served it
+  ([#21](https://github.com/tabnas/support/issues/21)).
+  `ts/test/release.test.js` fails if the deployed file, or a staged
+  candidate whenever there is one, names `go/adder` outside a comment.
 
 - **`rust.yml`** — the Rust gate: `ci/rust/run.sh` over the `rs/` crate
   and the `rs/adder/` crate (formatting, both lockfiles, build, tests,
