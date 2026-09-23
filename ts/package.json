@@ -43,8 +43,8 @@
   },
   "devDependencies": {
     "@tabnas/parser": "*",
-    "@types/node": "22.x",
-    "typescript": "5.x"
+    "@types/node": "26.x",
+    "typescript": "7.x"
   },
   "peerDependencies": {
     "@tabnas/parser": ">=0"
