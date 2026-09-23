@@ -57,7 +57,8 @@ cd adder && cargo test --all-targets
 is the full gate (formatting, both lockfiles, clippy) and needs
 `tabnas/parser` checked out beside this repository.
 
-Run that script before calling Rust work done, because **nothing hosted
-runs it**: `ci/workflows/rust.yml` is staged and not promoted, so the
-`ci.yml` matrix covers `ts/`, `go/` and `go/adder/` and stops. A red
-Rust crate reaches `main` with a green tick until that changes.
+Run that script before calling Rust work done. The `ci.yml` matrix
+covers `ts/`, `go/` and `go/adder/` and stops; `.github/workflows/rust.yml`
+runs this script, but only when a change touches `rs/**`, `test/spec/**`,
+`ts/package.json`, `ci/rust/**` or the workflow itself, and always
+against the engine's `main` rather than a release.

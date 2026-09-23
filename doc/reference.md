@@ -392,9 +392,9 @@ input	ts	go	rs
 ```
 
 Every suite runs the same file and reads a different column of it. A
-runtime whose cell repeats another's still belongs in the file: what the
-row records is that the columns are not all the same, not that this one
-is unique.
+runtime whose cell repeats the cell of another still belongs in the
+file: what the row records is that the columns are not all the same,
+not that this one is unique.
 
 ### Why this is more than a fixture
 

@@ -125,9 +125,10 @@ real grammar and needs a sibling checkout of `tabnas/parser`. From the
 repository root, `make test-rs` runs both, and `ci/rust/run.sh` is the
 full gate.
 
-Hosted CI does not run any of this yet. The Rust workflow is staged at
-`../ci/workflows/rust.yml` and has not been promoted, so `ci/rust/run.sh`
-locally is what stands in for it.
+Hosted CI runs `ci/rust/run.sh` through
+[`rust.yml`](../.github/workflows/rust.yml), on a change under `rs/`,
+the shared fixtures, `ci/rust/` or `ts/package.json`, with
+`tabnas/parser` `main` cloned beside this repository.
 
 ## License
 
