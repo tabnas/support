@@ -4,59 +4,57 @@ Staging area for GitHub Actions workflow changes.
 
 ## Pending
 
-- **`workflows/release.yml`** — the deployed copy plus one tag. It is
-  the promoted file with `go/adder/v$V` added to the tag list, and
-  nothing else changed.
-
-  `go/adder` is a separate Go module, and Go finds a nested module only
-  under its own path prefix, so `go/adder/vX.Y.Z` is the whole of that
-  module's release. The deployed workflow writes `ts/v` and `go/v` and
-  stops, which left `github.com/tabnas/support/go/adder` unresolvable at
-  v0.3.1 through v0.3.4: npm published, both tags landed, and the
-  release-time confirmation passed every time
-  ([#21](https://github.com/tabnas/support/issues/21)). Only
-  `make publish-go` creates the third tag, so a dispatch-driven release
-  needs a maintainer hand-off until this is promoted.
-
-  The tag goes in the one list the already-released guard, the anchor
-  choice and the atomic push all read, so it is guarded and pushed with
-  the other two rather than beside them. The `go/*` case arm needs no
-  change: it is a prefix glob, so it gates the new tag behind the `go`
-  input already. `ts/test/release.test.js` asserts all of that against
-  this file, so the fix cannot be edited back out unnoticed.
-
-- **`workflows/rust.yml`** — the Rust gate: `ci/rust/run.sh` over the
-  `rs/` crate and the `rs/adder/` crate (formatting, both lockfiles,
-  build, tests, doctests, clippy), with `tabnas/parser` cloned as a
-  sibling because the adder crate takes the engine by path. Standalone
-  rather than an arm of `ci.yml`, since the shared polyglot workflow
-  takes no Rust input. Runs on `rs/**`, `test/spec/**`, `ts/package.json`
-  and its own files.
-
-- **`workflows/docs.yml`** — the prose gate: Vale over the reader-facing
-  pages at the levels set in `.vale.ini`, on the file list
-  `ts/scripts/gated-docs.cjs` produces. See `docs/STYLE-GUIDE.md`.
-
-  It needs no sibling checkouts and no secrets, and pins its own Vale
-  version. Errors fail the job; warnings go to the run summary as a
-  report. `make prose` runs the identical check locally, and the other
-  half of the gate (`ts/test/docs.test.js`) already runs in `make test`,
-  so promoting this adds the spelling and Google-convention arm rather
-  than the whole gate.
+Nothing. Every staged workflow has been promoted, and the rollout
+deleted each staged copy as it went, so `ci/` holds only this file and
+the Rust gate script.
 
 ## Promoted
 
-Both earlier staged workflows now live in `.github/workflows/`:
+All four live in `.github/workflows/`:
 
 - **`ci.yml`** — the org-standard thin caller delegating to
   `tabnas/.github/.github/workflows/polyglot-ci.yml@main` with
   `deps: "parser"`, plus the repo-specific `go-adder` job described below.
-- **`release.yml`** — publishes `@tabnas/support` to npm on a `ts/v*` tag
-  push via GitHub OIDC Trusted Publishing. No `NPM_TOKEN`, no secret in
-  this repo. It tracks the `release.yml` in `parser`, `json`, `jsonic`
-  and `expr` from `name:` onward, differing only in the package name its
-  `npm view` calls name. The staged copy above adds a second intended
-  difference, the nested module's tag, which no other repo needs.
+- **`release.yml`** — publishes `@tabnas/support` to npm via GitHub OIDC
+  Trusted Publishing, on a `workflow_dispatch` from `main` (the normal
+  path, which also writes the release tags) or on a `ts/v*` tag push
+  (the orchestrator's path, where the tag steps do nothing). No
+  `NPM_TOKEN`, no secret in this repo. It tracks the `release.yml` in
+  `parser`, `json`, `jsonic` and `expr` from `name:` onward, differing
+  in the package name its `npm view` calls name and in one more tag,
+  `go/adder/v$V`, which no other repo needs.
+
+  `go/adder` is a separate Go module, and Go finds a nested module only
+  under its own path prefix, so `go/adder/vX.Y.Z` is the whole of that
+  module's release. The tag goes in the one list the already-released
+  guard, the anchor choice and the atomic push all read, so it is
+  guarded and pushed with the other two rather than beside them. The
+  `go/*` case arm gates it behind the `go` input, because it is a prefix
+  glob. `ts/test/release.test.js` asserts all of that against the
+  deployed file, and against a staged candidate whenever there is one.
+
+  The releases before it was deployed, v0.3.1 through v0.3.4, have no
+  adder tag ([#21](https://github.com/tabnas/support/issues/21)).
+
+- **`rust.yml`** — the Rust gate: `ci/rust/run.sh` over the `rs/` crate
+  and the `rs/adder/` crate (formatting, both lockfiles, build, tests,
+  doctests, clippy), under the MSRV toolchain, with `tabnas/parser`
+  `main` cloned as a sibling because the adder crate takes the engine by
+  path. Standalone rather than an arm of `ci.yml`, since the shared
+  polyglot workflow takes no Rust input. Runs on `rs/**`, `test/spec/**`,
+  `ts/package.json`, `ci/rust/**` and its own file.
+
+- **`docs.yml`** — the prose gate: Vale over the reader-facing pages at
+  the levels set in `.vale.ini`, on the file list
+  `ts/scripts/gated-docs.cjs` produces, then `ts/scripts/vale-counts.cjs`
+  over the counts recorded for it. See `docs/STYLE-GUIDE.md`.
+
+  It needs no sibling checkouts and no secrets, and pins its own Vale
+  version. Errors fail the job; warnings go to the run summary as a
+  report. `make prose` runs the identical check locally, and the other
+  half of the gate (`ts/test/docs.test.js`) runs in `make test` and in
+  `ci.yml`. Runs on the gated pages, the style guide, the Vale
+  configuration, the two scripts and its own file.
 
 This directory exists because session credentials cannot write
 `.github/workflows/*` — see admin `DECISIONS.md` ADR-8. To change CI:
@@ -107,5 +105,5 @@ Everything CI runs is runnable locally:
 ```bash
 make test         # ts/, go/, go/adder/, rs/ and rs/adder/
 make vet          # go vet over both modules
-ci/rust/run.sh    # the Rust gate exactly as the staged workflow runs it
+ci/rust/run.sh    # the Rust gate exactly as rust.yml runs it
 ```

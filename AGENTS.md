@@ -229,16 +229,16 @@ CI lives in `.github/workflows/` and is promoted by a maintainer via
 workflow changes are **staged in [`ci/workflows/`](ci/README.md)** and
 moved across out of band.
 
-`.github/workflows/ci.yml` and `.github/workflows/release.yml` are both
-promoted and live. `release.yml` tracks the fleet copy from `name:`
-onward with exactly two intended differences: the package name in its
-`npm view` calls, and the third release tag. Keep it to those two.
+All four workflows are promoted and live: `ci.yml`, `release.yml`,
+`rust.yml` and `docs.yml`. `release.yml` tracks the fleet copy from
+`name:` onward with exactly two intended differences: the package name
+in its `npm view` calls, and the third release tag. Keep it to those
+two.
 
-The third tag is `go/adder/v$V`, and it is staged in
-[`ci/workflows/release.yml`](ci/README.md) rather than deployed. No
-other tabnas repo has a nested module, so no other copy needs it. See
-[Releasing](#releasing) for what the gap means for a release run before
-a maintainer promotes the staged file.
+The third tag is `go/adder/v$V`, in the deployed tag list. No other
+tabnas repo has a nested module, so no other copy needs it. See
+[Releasing](#releasing) for the releases that went out before it was
+deployed.
 
 Beyond the org-standard `polyglot-ci.yml` caller, `ci.yml` carries one
 repo-specific job, `go-adder`: the shared workflow runs `go test ./...`
@@ -247,11 +247,13 @@ in `go/` only, and `./...` does not cross a module boundary, so the
 would otherwise silently not run.
 
 Keep that job in step with the Makefile: `make test` and CI must cover
-the same trees. They do not yet. `make test` covers five (`ts/`, `go/`,
-`go/adder/`, `rs/` and `rs/adder/`); CI covers the first three, because
-the Rust gate is `ci/workflows/rust.yml`, which is **staged and not
-promoted**. Until a maintainer promotes it, nothing hosted runs the Rust
-crates, and `ci/rust/run.sh` locally is the only thing that does.
+the same trees. `make test` covers five (`ts/`, `go/`, `go/adder/`,
+`rs/` and `rs/adder/`); `ci.yml` covers the first three, and `rust.yml`
+runs `ci/rust/run.sh` over the other two. `rust.yml` is path-filtered
+(`rs/**`, `test/spec/**`, `ts/package.json`, `ci/rust/**` and itself),
+so a change outside those paths does not run it, and it builds the
+adder crate against parser `main` rather than a release, so an engine
+change can turn it red with nothing changed here.
 
 If a second tabnas repo ever grows a nested module, move the `go-adder`
 job upstream as a `go-test-dirs` input to `polyglot-ci.yml` rather than
@@ -274,7 +276,7 @@ the only one an agent can take: **a session's credentials cannot push tag
 refs — `git push origin ts/v…` fails with HTTP 403**, while branch pushes
 from the same credentials succeed. It is a ref-type boundary, not a broken
 token or a network fault. Nothing is lost by never touching a tag, because
-the workflow creates both tags itself, in one atomic push, *after* npm
+the workflow creates the tags itself, in one atomic push, *after* npm
 accepts the publish. Pushing a tag by hand is the orchestrator's path
 (`admin/publish.sh`), not yours.
 
@@ -402,31 +404,22 @@ The steps, in order:
    [ "$GH" = "$REL" ] || { echo "shipped $GH, not the $REL you cleared"; exit 1; }
    ```
 
-   **The DEPLOYED dispatch does not create `go/adder/vX.Y.Z`.**
-   `.github/workflows/release.yml` writes `ts/v$V` and `go/v$V` and nothing
-   else — grep it for `adder` and you get no hits. But this repo's own tag
-   table says that third tag is required: *"Without it the module is
-   unresolvable, because Go finds a nested module only under its own path
-   prefix."* So a dispatch-only release publishes npm, tags the main Go
-   module, and leaves `github.com/tabnas/support/go/adder` unresolvable at
-   the new version. That is not hypothetical: v0.3.1 through v0.3.4 each
-   went out that way, and none of them has the tag —
-   [#21](https://github.com/tabnas/support/issues/21).
-
-   **The STAGED copy fixes it, and is waiting on promotion.**
-   `ci/workflows/release.yml` adds `go/adder/v$V` to the same list the
+   **The dispatch creates `go/adder/vX.Y.Z` too.**
+   `.github/workflows/release.yml` puts `go/adder/v$V` in the same list the
    already-released guard, the anchor choice and the atomic push all read,
-   so once a maintainer promotes it with the admin
-   `rollout/apply-ci-folders.sh` script a dispatch tags all three.
-   `ts/test/release.test.js` holds the staged file to that, so the fix
-   cannot be lost to a later edit of the staged copy.
+   and its `go/*` case arm gates that tag behind the `go` input along with
+   `go/v$V`. `ts/test/release.test.js` holds the deployed file, and any
+   staged candidate, to that.
 
-   **Until it is promoted, hand over.** A session cannot push a tag (HTTP
-   403 on tag refs), so this is the one step here that genuinely needs a
-   maintainer: `make publish-go V=x.y.z` pushes `go/v` and `go/adder/v`
-   together. Hand over explicitly, and do not call the release finished
-   until all three refs are present. After promotion that hand-off is still
-   the repair path for a release that predates it.
+   **The releases before it did not.** v0.3.1 through v0.3.4 went out with
+   `ts/v` and `go/v` and no adder tag: v0.3.1 to v0.3.3 by the
+   orchestrator's `ts/v*` tag push, on which this workflow writes no tags
+   and `admin/publish.sh` pushes only `go/v` and `ts/v`, and v0.3.4 by a
+   dispatch of the workflow as it stood before the adder tag was added. So
+   `github.com/tabnas/support/go/adder` has tagged versions v0.2.0 and
+   v0.3.0 and none later; [#21](https://github.com/tabnas/support/issues/21)
+   tracks whether to backfill. A session cannot push a tag (HTTP 403 on
+   tag refs), so any backfill is a maintainer's.
 
    **Check `dist.attestations`, not just that the version exists.** The
    workflow fails *open* on an already-published version, so a version that

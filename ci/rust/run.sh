@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Rust gate. Kept in one script so local and hosted validation cannot
-# quietly drift apart: ci/workflows/rust.yml runs this file, and so can
-# you. `make test-rs` is the fast inner loop; this is the full gate.
+# quietly drift apart: .github/workflows/rust.yml runs this file, and so
+# can you. `make test-rs` is the fast inner loop; this is the full gate.
 #
 # Two crates: rs/ (tabnas-support, no dependencies) and rs/adder/ (the
 # adder grammar, which takes the engine as a PATH DEPENDENCY on the
