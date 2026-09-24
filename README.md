@@ -190,8 +190,9 @@ make vet     # go vet over both Go modules
 
 CI runs on push and PR (`.github/workflows/ci.yml`), and a `ts/v*` tag
 publishes to npm via OIDC trusted publishing
-(`.github/workflows/release.yml`). Workflow changes are staged in
-[`ci/`](ci/README.md) first: a maintainer moves them into `.github/`.
+(`.github/workflows/release.yml`). Workflow changes are made in
+`.github/workflows/` directly, in a reviewed pull request, as
+[`ci/README.md`](ci/README.md) describes.
 
 Releasing is three commands: `make version V=x.y.z` to move every
 version site, then `make tag-ts V=x.y.z` (npm, via OIDC trusted

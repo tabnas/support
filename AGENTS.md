@@ -300,17 +300,20 @@ rather than before.
 
 ## CI
 
-CI lives in `.github/workflows/` and is promoted by a maintainer via
-`tabnas/admin` (session credentials cannot write workflow files), so
-workflow changes are **staged in [`ci/workflows/`](ci/README.md)** and
-moved across out of band.
+CI lives in `.github/workflows/`. To change it, edit the workflow there
+in a reviewed pull request: session credentials push workflow files
+(admin `DECISIONS.md` ADR-8, as amended 2026-09-24), so staging a change
+in `ci/workflows/` first is optional (see [`ci/README.md`](ci/README.md)).
+Sessions still cannot push tags, so a maintainer pushes any tag that a
+tag-triggered workflow needs.
 
-All four workflows are promoted and live: `ci.yml`, `release.yml`,
-`rust.yml` and `docs.yml`. `release.yml` tracks the fleet copy (the one
-in `json`, `jsonic` and `expr`) from `name:` onward with exactly one
-intended difference: the package name in its `npm view` calls. Keep it
-to that one. In particular it creates the fleet's two tags and no third
-for `go/adder`, which is private (see [Release](#release)).
+The four workflows once staged in `ci/` are promoted and live: `ci.yml`,
+`release.yml`, `rust.yml` and `docs.yml`. `release.yml` tracks the fleet
+copy (the one in `json`, `jsonic` and `expr`) from `name:` onward with
+exactly one intended difference: the package name in its `npm view`
+calls. Keep it to that one. In particular it creates the fleet's two
+tags and no third for `go/adder`, which is private (see
+[Release](#release)).
 
 Beyond the org-standard `polyglot-ci.yml` caller, `ci.yml` carries one
 repo-specific job, `go-adder`: the shared workflow runs `go test ./...`
