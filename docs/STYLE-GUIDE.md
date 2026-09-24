@@ -376,9 +376,11 @@ so `[Ee]nder` does not accept `enders`: a plural or a possessive is an
 entry of its own. Never add a suffix pattern: `\w+ise` accepts
 `madeupise` too, and punches a hole through the gate the file exists to
 make usable. Write a case pair as one regular expression (`[Tt]abnas`),
-and put an acronym's capitals in the same entry (`(?:[Jj]son|JSON)`),
-because two plain lines make Vale enforce one spelling over the other,
-and it will then report the directory `ts/` as a misspelling of `TS`.
+because two plain lines make Vale enforce one spelling over the other. A
+name also written in lower case, as a package name is, puts its capitals
+in the same entry (`(?:[Jj]son|JSON)`); a name with one correct case is
+one exact entry (`TS`, `DOMPurify`), so Vale reports any other case of
+it.
 
 ## The fleet
 
