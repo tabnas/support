@@ -21,9 +21,10 @@
  *
  * Both copies of the workflow are checked when both exist. The deployed
  * `.github/workflows/release.yml` is required: it is the one that runs. A
- * candidate staged in `ci/workflows/release.yml` (the ADR-8 route, for
- * credentials that cannot write workflow files) is optional, and held to
- * the same rules, since a candidate that brings the adder tag back is the
+ * candidate staged in `ci/workflows/release.yml` (the route admin ADR-8
+ * required until its 2026-09-24 amendment; sessions now edit the deployed
+ * file in a reviewed pull request) is optional, and held to the same
+ * rules, since a candidate that brings the adder tag back is the
  * deployed file's defect the day it is promoted. Promotion deletes the
  * staged copy, which is why neither path may be assumed to exist alone.
  */

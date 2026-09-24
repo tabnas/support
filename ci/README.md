@@ -1,12 +1,25 @@
 # ci/
 
-Staging area for GitHub Actions workflow changes.
+The scripts the CI workflows run, and what each promoted workflow does.
 
-## Pending
+To change CI, edit `.github/workflows/` in a reviewed pull request.
+Session credentials push workflow files (admin `DECISIONS.md` ADR-8, as
+amended 2026-09-24), so staging a workflow here first for a maintainer
+to promote is optional. Sessions still cannot push tags, so a maintainer
+pushes any tag that a tag-triggered workflow needs.
 
-Nothing. Every staged workflow has been promoted, and the rollout
+Some of the workflows are maintained in admin as well, and an edit made
+only in this repository does not last. A workflow with a template in
+admin `rollout/workflows/`, named `support__<file>`, changes in that
+template too, in a pull request to admin. Today that is `ci.yml`,
+`release.yml`, `crates-release.yml` and `github-release.yml`. Admin
+`scripts/verify.sh` reports a deployed copy that differs from its
+template, and the next `rollout/apply-workflows.sh --apply` writes the
+template back over it.
+
+Every workflow once staged here has been promoted, and the rollout
 deleted each staged copy as it went, so `ci/` holds only this file and
-the Rust gate script.
+the Rust gate script, `rust/run.sh`.
 
 ## Promoted
 
@@ -54,13 +67,6 @@ All four live in `.github/workflows/`:
   `ci.yml`. Runs on the gated pages, the style guide, the Vale
   configuration, the two scripts and its own file.
 
-This directory exists because session credentials cannot write
-`.github/workflows/*` — see admin `DECISIONS.md` ADR-8. To change CI:
-
-1. Put the intended workflow file in `workflows/`.
-2. A maintainer promotes it with the admin `rollout/apply-ci-folders.sh`
-   script.
-
 ## The `go-adder` job
 
 Worth knowing why `ci.yml` is not the one-line caller every other repo
@@ -96,7 +102,7 @@ it.
 Most CI behaviour (the OS matrix, Node and Go versions, `core.autocrlf
 false`, the sibling-linking that makes cross-repo changes testable
 before release) lives in the shared reusable workflow — change it in
-`tabnas/.github` rather than staging a local override.
+`tabnas/.github` rather than adding a local override.
 
 Everything CI runs is runnable locally:
 
