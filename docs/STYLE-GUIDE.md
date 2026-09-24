@@ -65,7 +65,7 @@ is capability, not preference.**
 
 **A Google rule sitting below error level was tried at error first and
 found wrong for these pages.** `.vale.ini` records what each produced on
-a clean run over the gated set: 231 alerts across 4 files. Those numbers
+a clean run over the gated set: 275 alerts across 4 files. Those numbers
 were written by hand once, and this sentence and the one in `.vale.ini`
 drifted apart from each other and from a run.
 `node ts/scripts/vale-counts.cjs` now reads both against a live Vale run
@@ -371,12 +371,16 @@ notations" is. A rule demoted without that note reads later as an
 oversight, and gets re-promoted by somebody repeating the work.
 
 To accept a word the spelling gate does not know, add it to `accept.txt`
-in the same directory, one stem at a time. Never add a suffix pattern:
-`\w+ise` accepts `madeupise` too, and punches a hole through the gate the
-file exists to make usable. Write a case pair as one regular expression
-(`[Tt]abnas`), because two plain lines make Vale enforce one spelling
-over the other, and it will then report the directory `ts/` as a
-misspelling of `TS`.
+in the same directory, one word at a time. An entry matches a whole word,
+so `[Ee]nder` does not accept `enders`: a plural or a possessive is an
+entry of its own. Never add a suffix pattern: `\w+ise` accepts
+`madeupise` too, and punches a hole through the gate the file exists to
+make usable. Write a case pair as one regular expression (`[Tt]abnas`),
+because two plain lines make Vale enforce one spelling over the other. A
+name also written in lower case, as a package name is, puts its capitals
+in the same entry (`(?:[Jj]son|JSON)`); a name with one correct case is
+one exact entry (`TS`, `DOMPurify`), so Vale reports any other case of
+it.
 
 ## The fleet
 
