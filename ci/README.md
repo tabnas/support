@@ -12,10 +12,10 @@ Some of the workflows are maintained in admin as well, and an edit made
 only in this repository does not last. A workflow with a template in
 admin `rollout/workflows/`, named `support__<file>`, changes in that
 template too, in a pull request to admin. Today that is `ci.yml`,
-`release.yml`, `crates-release.yml` and `github-release.yml`. Admin
-`scripts/verify.sh` reports a deployed copy that differs from its
-template, and the next `rollout/apply-workflows.sh --apply` writes the
-template back over it.
+`release.yml`, `crates-release.yml`, `github-release.yml` and
+`deps-gate.yml`. Admin `scripts/verify.sh` reports a deployed copy that
+differs from its template, and the next
+`rollout/apply-workflows.sh --apply` writes the template back over it.
 
 Every workflow once staged here has been promoted, and the rollout
 deleted each staged copy as it went, so `ci/` holds only this file and
@@ -104,7 +104,9 @@ false`, the sibling-linking that makes cross-repo changes testable
 before release) lives in the shared reusable workflow — change it in
 `tabnas/.github` rather than adding a local override.
 
-Everything CI runs is runnable locally:
+Everything CI runs is runnable locally except `deps-gate.yml`, whose script
+is inline in the reusable workflow in `tabnas/.github` rather than in this
+checkout:
 
 ```bash
 make test         # ts/, go/, go/adder/, rs/ and rs/adder/
