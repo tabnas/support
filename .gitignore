@@ -153,3 +153,5 @@ vite.config.ts.timestamp-*
 
 # Cargo build output for the Rust crates under rs/.
 target/
+
+.DS_Store
