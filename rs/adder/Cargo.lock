@@ -150,8 +150,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "tabnas"
-version = "0.12.4"
+name = "tabnas-parser"
+version = "0.12.7"
 dependencies = [
  "indexmap",
  "regex",
@@ -170,7 +170,7 @@ dependencies = [
 name = "tabnas-support-adder"
 version = "0.3.5"
 dependencies = [
- "tabnas",
+ "tabnas-parser",
  "tabnas-support",
 ]
 
