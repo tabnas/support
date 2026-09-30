@@ -24,9 +24,10 @@ path = "src/lib.rs"
 [dependencies]
 # The engine is consumed as a SIBLING CHECKOUT, the standard tabnas
 # development model: clone https://github.com/tabnas/parser next to the
-# support repository. The `tabnas` crate is not published, so there is no
-# registry version to fall back on.
-tabnas = { path = "../../../parser/rs" }
+# support repository. The engine's package is `tabnas-parser` (its library
+# keeps the name `tabnas`); committed manifests stay path-only (admin
+# ADR-21).
+tabnas = { package = "tabnas-parser", path = "../../../parser/rs" }
 
 [dev-dependencies]
 tabnas-support = { path = "..", features = ["serde_json"] }
