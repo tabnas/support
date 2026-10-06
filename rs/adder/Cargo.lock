@@ -161,14 +161,14 @@ dependencies = [
 
 [[package]]
 name = "tabnas-support"
-version = "0.3.7"
+version = "0.3.8"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "tabnas-support-adder"
-version = "0.3.7"
+version = "0.3.8"
 dependencies = [
  "tabnas-parser",
  "tabnas-support",
