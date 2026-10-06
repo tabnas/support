@@ -23,7 +23,7 @@ go 1.24.7
 // (`make version`).
 require (
 	github.com/tabnas/parser/go v0.12.10
-	github.com/tabnas/support/go v0.3.6
+	github.com/tabnas/support/go v0.3.7
 )
 
 replace github.com/tabnas/support/go => ../
