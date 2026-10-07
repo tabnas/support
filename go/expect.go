@@ -153,13 +153,13 @@ func ErrorExpect(expected string) (ErrorExpectation, error) {
 // LoneSurrogateAt returns the position of the first UNPAIRED \uXXXX
 // surrogate escape in an expected cell, counted in CODE POINTS, or -1.
 //
-// Code points because this number crosses the two runtimes. The natural
+// Code points because this number crosses the runtimes. The natural
 // index here is a BYTE offset and in ts/src/expect.ts it is a UTF-16
 // offset, and those disagree the moment anything non-ASCII precedes the
 // escape: for `"é\ud800"` they are 3 and 2. A helper whose whole purpose
-// is to keep the two ports saying the same thing cannot report a number
+// is to keep the ports saying the same thing cannot report a number
 // that depends on which port asked. A code-point count is the same in
-// both by definition, and it is also what someone counting characters in
+// each by definition, and it is also what someone counting characters in
 // a TSV cell would arrive at.
 //
 // WHY THIS IS NOT A CURIOSITY. The two runtimes decode such an escape
@@ -266,7 +266,7 @@ func LoneSurrogateAt(cell string) int {
 }
 
 // LoneSurrogateMessage is the message the runner uses when a shared cell
-// holds one. Exported so both runtimes say the same thing, and so a
+// holds one. Exported so every runtime says the same thing, and so a
 // caller building its own runner can reuse it rather than inventing a
 // vaguer one.
 func LoneSurrogateMessage(cell string, at int) string {
@@ -394,8 +394,8 @@ func widenNumbers(v any) any {
 // container, a breaking change for every consumer, to pin a property no
 // format in the fleet defines as significant.
 //
-// Signed zero is IN it. -0 is representable and distinguishable in both
-// runtimes, and a parser that reports 0 for the input -0 has lost
+// Signed zero is IN it. -0 is representable and distinguishable in every
+// runtime, and a parser that reports 0 for the input -0 has lost
 // information the source carried.
 func EqualValue(got, expected any) bool {
 	return equalValue(got, expected, nil)

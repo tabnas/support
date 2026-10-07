@@ -100,12 +100,13 @@ version:
 # own entry in its Cargo.lock moves too, which is what the cargo metadata
 # runs below are for; that pair is checked by ci/rust/run.sh
 # (check_lock_version), not by the version test. Neither commits nor
-# tags: neither crate is published. The adder crate cannot be, since it
-# takes the engine by path and crates.io refuses a path dependency, and
-# it says so with publish = false. The support crate carries no path
-# dependency and so is publishable in principle; it has simply never
-# been published, and consumers take it as a path dependency on a
-# sibling checkout. Only the constants need to stay in step.
+# tags, and neither publishes: release.yml's crates job publishes
+# tabnas-support to crates.io from the release tag, and as the crate has
+# no path dependency it goes up as committed. The adder crate is never
+# published: it takes the engine by path, and it says so with
+# publish = false. The fleet's crates take tabnas-support by path from a
+# sibling checkout, because their committed manifests stay path-only.
+# Only the constants need to stay in step.
 version-rs:
 	@test -n "$(V)" || (echo "Usage: make version-rs V=x.y.z" && exit 1)
 	sed -i.bak 's/^version = ".*"/version = "$(V)"/' rs/Cargo.toml rs/adder/Cargo.toml
@@ -166,9 +167,9 @@ clean-rs:
 #
 # NOTE: this rewrites the Go side ONLY (go/support.go and the
 # go/adder/go.mod require). It does NOT touch
-# ts/src/support.ts or ts/package.json — keeping the two runtimes in sync
-# is the release orchestrator's job, and the version tests in both
-# runtimes fail the build if they ever drift.
+# ts/src/support.ts or ts/package.json — keeping the runtimes in sync
+# is the release orchestrator's job, and the version test in each
+# runtime fails the build if they ever drift.
 #
 # Because go/version_test.go checks VERSION against ts/package.json, a Go
 # release for a version the TypeScript side has not reached would leave

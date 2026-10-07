@@ -9,7 +9,7 @@ import (
 )
 
 // register.go — a divergence register: the places two ports of one grammar
-// DISAGREE, recorded in a fixture both ports execute.
+// DISAGREE, recorded in a fixture every port executes.
 //
 // The audit this exists for found 29 recorded divergence claims
 // contradicted by execution, and one file that had been wrong in BOTH
@@ -25,7 +25,7 @@ import (
 //
 // ts/src/register.ts mirrors all of this.
 
-// Register is a fixture of recorded divergences, run by both ports.
+// Register is a fixture of recorded divergences, run by every port.
 //
 // Each row gives an input and one cell per runtime, written in the same
 // vocabulary as an ordinary fixture's expected column — a JSON value, or
@@ -294,7 +294,7 @@ func (g Register) CheckRow(row *Row, input string) error {
 // Compared by meaning, not by bytes. `1` and `1.0`, or two objects written
 // with their keys in a different order, are the same expectation to the
 // runner — so a row whose cells differ only that way records no divergence,
-// and comparing raw strings would let it sit there passing in both ports
+// and comparing raw strings would let it sit there passing in every port
 // forever while describing a disagreement that does not exist. That is the
 // exact failure this whole mechanism exists to prevent, one level up.
 func (g Register) sameExpectation(a, b string) bool {

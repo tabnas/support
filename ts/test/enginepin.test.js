@@ -3,7 +3,7 @@
 /* enginepin.test.js — the two runtimes test against ONE engine version.
  *
  * support is the library every tabnas repo's parity mechanism runs through,
- * and go/adder is the end-to-end check that its two runtimes agree. That
+ * and go/adder is the end-to-end check that its runtimes agree. That
  * check means nothing if each runtime is wired to a different engine: the
  * committed lockfile pinned @tabnas/parser 0.8.1 while go/adder/go.mod
  * required parser/go v0.8.0 and the fleet shipped 0.8.10, so the "the two

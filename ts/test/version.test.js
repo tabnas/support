@@ -1,7 +1,7 @@
 /* Copyright (c) 2026 tabnas, MIT License */
 'use strict'
 
-/* version.test.js — the two runtimes ship one version number.
+/* version.test.js — the runtimes ship one version number.
  *
  * The Go module has no package.json to read, so `go/version_test.go`
  * checks its own constant against `ts/package.json` from disk. This side

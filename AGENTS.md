@@ -85,7 +85,7 @@ sides already matched.
 | `rs/` | Rust port. Crate `tabnas-support` (library `tabnas_support`), **no required dependencies**: `escape.rs`, `spec.rs`, `expect.rs`, `runner.rs`, `register.rs`, `census.rs`, plus `value.rs`, the fixture data model with its own JSON reader and writer. See [`rs/AGENTS.md`](rs/AGENTS.md). |
 | `rs/adder/` | **Separate crate** (`tabnas-support-adder`) holding the adder grammar, which needs the engine as a sibling checkout (`../../../parser/rs`). |
 | `test/spec/` | Shared `.tsv` fixtures. See [`test/AGENTS.md`](test/AGENTS.md). |
-| `doc/reference.md` | The fixture format and the full API in both languages, side by side. |
+| `doc/reference.md` | The fixture format and the full API: TypeScript and Go side by side, then a Rust section. |
 
 ## Authority and alignment rules
 
@@ -318,7 +318,7 @@ tags and no third for `go/adder`, which is private (see
 Beyond the org-standard `polyglot-ci.yml` caller, `ci.yml` carries one
 repo-specific job, `go-adder`: the shared workflow runs `go test ./...`
 in `go/` only, and `./...` does not cross a module boundary, so the
-`go/adder` suite — the end-to-end check that the two runtimes agree —
+`go/adder` suite — the end-to-end check that the runtimes agree —
 would otherwise silently not run.
 
 Keep that job in step with the Makefile: `make test` and CI must cover
@@ -416,14 +416,18 @@ The steps, in order:
    ```bash
    (
      cd go
-     go mod edit -json | grep -q '"Replace": null' || { echo 'go.mod has a replace'; exit 1; }
+     go mod edit -json | jq -e '.Replace == null' >/dev/null || { echo 'go.mod has a replace'; exit 1; }
      GOWORK=off go test -count=1 ./...
      (cd adder && GOWORK=off go test -count=1 ./...)
    )
    ```
 
    `-count=1` because shared fixtures live outside the Go module, so a
-   changed corpus does not invalidate the test cache.
+   changed corpus does not invalidate the test cache. The check asks `jq`,
+   not `grep`: current Go leaves the `Replace` key out when there is no
+   replace, where older Go printed `"Replace": null`, and `jq` reads a
+   missing key as null, so the check passes on a clean `go.mod` and fails
+   on a replace either way.
 
    **`./...` from `go/` does not reach `go/adder`.** It is a separate module,
    and `go test ./...` stops at the module boundary — verified: the run above

@@ -1,8 +1,8 @@
 # Agents Guide — shared spec fixtures
 
-`spec/**/*.tsv` holds this repo's cross-runtime fixtures. Both runtimes
-run the same files, so a change here affects TypeScript and Go together —
-edit with that in mind.
+`spec/**/*.tsv` holds this repo's cross-runtime fixtures. Every runtime
+runs the same files, so a change here affects TypeScript, Go and Rust
+together — edit with that in mind.
 
 Unlike the other tabnas repos, these fixtures test the **fixture
 machinery** rather than a parser. The format they use is the format this
@@ -71,9 +71,9 @@ null. An empty cell means "no value", and TypeScript reads that as
 `undefined` while Go — which has no `undefined` — reads it as `nil`.
 
 Two things to know about numbers in an expected cell: one beyond float64
-range (`1e400`) reads as `Infinity` in both runtimes, and an integer
-beyond 2^53 is **inexact** in both — `9007199254740993` reads as
-`...992`, so do not pin one and expect either side to tell it from its
+range (`1e400`) reads as `Infinity` in every runtime, and an integer
+beyond 2^53 is **inexact** in all of them — `9007199254740993` reads as
+`...992`, so do not pin one and expect any of them to tell it from its
 neighbour. See [`doc/reference.md`](../doc/reference.md).
 
 ## Who runs what
@@ -103,21 +103,21 @@ its own test sources, so adding a fixture and wiring up one side turns the
 other side red. A row only one runtime runs is agreed by nobody, which is
 the one thing this directory exists to prevent.
 
-`spec/util/loader-rows.tsv` is a **layout** fixture: both runtimes assert
+`spec/util/loader-rows.tsv` is a **layout** fixture: every runtime asserts
 its rows sit on specific physical line numbers. Do not reflow it, and do
-not add or remove lines above the data without updating both assertions.
+not add or remove lines above the data without updating every assertion.
 
 ## Rules
 
 - Prefer adding a fixture here over a one-off in-language assertion when a
-  case is expressible as input → output. That is what keeps the two
+  case is expressible as input → output. That is what keeps the
   runtimes honest against each other.
-- TypeScript is canonical. If the two runtimes disagree, the TS behaviour
-  is the expected value — unless Go has exposed a genuine TS defect, in
-  which case fix TS first and pin the corrected behaviour here.
+- TypeScript is canonical. If the runtimes disagree, the TS behaviour
+  is the expected value — unless another port has exposed a genuine TS
+  defect, in which case fix TS first and pin the corrected behaviour here.
 - A new fixture must pass in EVERY runtime: run `make test` (or `go test
   ./...` from `go/` and `go/adder/`, `npm test` from `ts/`, and
   `cargo test` from `rs/` and `rs/adder/`) before considering it done.
 - Some behaviour cannot be written down here — `NaN`, an explicit
   `undefined` key, Go's numeric types. Those stay as in-language cases
-  next to the fixture-driven ones, and both runtimes carry their own.
+  next to the fixture-driven ones, and each runtime carries its own.

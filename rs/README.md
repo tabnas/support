@@ -54,16 +54,22 @@ is what the engine's `Value::to_json` produces.
 
 ## Install
 
-The crate is not on crates.io. Take it as a path dependency on a sibling
-checkout, the standard tabnas development model:
+The crate is on crates.io. Take it as a dev-dependency, with the
+`serde_json` feature when your parser produces a `serde_json::Value`:
+
+```bash
+cargo add --dev tabnas-support --features serde_json
+```
+
+A dev-dependency never reaches a release artifact, which is the same
+guarantee `devDependencies` gives the TypeScript half. The tabnas crates
+themselves take it by path from a sibling checkout instead, because their
+committed manifests stay path-only:
 
 ```toml
 [dev-dependencies]
 tabnas-support = { path = "../../support/rs", features = ["serde_json"] }
 ```
-
-A dev-dependency never reaches a release artifact, which is the same
-guarantee `devDependencies` gives the TypeScript half.
 
 ## What is in it
 

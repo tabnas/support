@@ -4,13 +4,14 @@
  * The TSV spec-fixture loader.
  *
  * Every tabnas package keeps its cross-runtime conformance fixtures in
- * `test/spec/*.tsv` at the repo root, above both runtimes, so `ts/` and
- * `go/` run the same files. Before this package each repo carried its own
+ * `test/spec/*.tsv` at the repo root, above every runtime, so `ts/`, `go/`
+ * and `rs/` run the same files. Before this package each repo carried its own
  * loader, and they had quietly drifted: one decoded `\t` and another did
  * not, one skipped `#` comment lines and another crashed on them, one
  * decoded escapes in every column and another only in the first. A row
  * that means two different things in two runtimes cannot pin agreement on
- * anything else, so there is one loader now, and `go/spec.go` mirrors it.
+ * anything else, so there is one loader now, and `go/spec.go` and
+ * `rs/src/spec.rs` mirror it.
  *
  * The rules, in full:
  *
@@ -215,7 +216,7 @@ export function loadSpec(path: string, options?: SpecOptions): SpecFile {
 }
 
 
-// Load every `*.tsv` in a directory, sorted by name so both runtimes and
+// Load every `*.tsv` in a directory, sorted by name so every runtime and
 // successive runs visit them in the same order. Discovery by listing is
 // deliberate: adding a fixture then runs it without editing a runner.
 export function loadSpecDir(dir: string, options?: SpecOptions): SpecFile[] {

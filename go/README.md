@@ -7,11 +7,12 @@ parser system: the TSV spec-fixture loader, the escape codec, the
 expectation helpers and the cross-runtime test runner.
 
 This is the Go half. The canonical TypeScript half is
-[`@tabnas/support`](../ts/), and the two are written to behave identically:
+[`@tabnas/support`](../ts/), the Rust half is [`tabnas-support`](../rs/),
+and the three are written to behave identically:
 same escape codec, same comment and blank-line handling, same
 `ERROR:<code>` contract, same value comparison. That is the point: every
-tabnas package proves its two runtimes agree by running **one** set of TSV
-fixtures in **both**, and a loader that disagreed with its twin would make
+tabnas package proves its runtimes agree by running **one** set of TSV
+fixtures in **each**, and a loader that disagreed with the others would make
 those fixtures prove nothing.
 
 **This module has no dependencies, and never will.** Every tabnas repo
@@ -129,8 +130,9 @@ tn.Parse("1+2+3")   // => 6
 
 The integer-addition grammar from the `tabnas/parser` README, packaged as
 a plugin in the separate [`adder`](adder/) module. It is this module's
-end-to-end check: `adder/adder_test.go` and `ts/test/adder.test.js` run it
-against the same `test/spec/adder/*.tsv` rows in both runtimes.
+end-to-end check: `adder/adder_test.go`, `ts/test/adder.test.js` and
+`rs/adder/tests/adder_test.rs` run it against the same
+`test/spec/adder/*.tsv` rows in all three runtimes.
 
 The `adder` module is private to this repository. Nothing tags or
 publishes it, so there is no version of it to `go get`. The example shows

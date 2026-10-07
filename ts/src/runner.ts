@@ -69,7 +69,7 @@ export type RunnerOptions = {
   // — an `ERROR` cell is an error expectation before it is anything else.
   //
   // JSON is what an expected cell should be wherever it can be, because
-  // it is the one notation both runtimes already agree on. But some
+  // it is the one notation every runtime already agrees on. But some
   // grammars produce values JSON cannot spell: JSON5's `NaN` and
   // `Infinity`, and the `UNDEFINED` several repos use for "the parse
   // yielded no value at all", which is a different result from `null`.
@@ -226,7 +226,7 @@ export class SpecRunner {
     // Only on the DEFAULT path. `parseExpected` exists because a
     // fixture's vocabulary can be wider than JSON, and a wider vocabulary
     // need not read `\uXXXX` as an escape at all — a hook treating
-    // `RAW:\ud800` as opaque text is asking a question both runtimes can
+    // `RAW:\ud800` as opaque text is asking a question every runtime can
     // answer identically, and refusing it would be this check inventing a
     // problem. A hook whose syntax DOES use JSON escapes should call
     // `loneSurrogateAt` itself; it is exported for that.

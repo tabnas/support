@@ -172,7 +172,7 @@ export function coverage(
 // while Go's sort.Strings compares UTF-8 bytes, which for valid UTF-8
 // IS code-point order. A tabnas error code can never contain either,
 // but a catalogue key is whatever the caller's map holds, and a census
-// whose two runtimes order the same answer differently would fail the
+// whose runtimes order the same answer differently would fail the
 // very parity it exists to report on.
 function codePointCompare(a: string, b: string): number {
   const acp = Array.from(a)
