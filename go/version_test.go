@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-// version_test.go — the two runtimes ship one version number.
+// version_test.go — the runtimes ship one version number.
 //
 // It appears in FOUR places: ts/package.json, ts/src/support.ts,
 // go/support.go, and the require on the support module in

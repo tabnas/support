@@ -74,7 +74,7 @@ has. The shared workflow runs `go test ./...` in `go/` only, and `./...`
 does not cross a module boundary. `go/adder` is a **separate module** —
 that is what keeps the support module dependency-free — so without a
 second job the adder suite does not run at all. That suite is the
-end-to-end check that the two runtimes agree, and a test that quietly
+end-to-end check that the runtimes agree, and a test that quietly
 does not run reports a green tick that is a lie.
 
 The job clones `parser` as a sibling and wires it in through a `go.work`,

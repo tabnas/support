@@ -3,7 +3,7 @@
 // Package adder holds the adder grammar, as a plugin.
 //
 // This is the integer-addition grammar from the tabnas/parser README
-// (1+2+3 => 6), packaged so both runtimes can run it against the shared
+// (1+2+3 => 6), packaged so every runtime can run it against the shared
 // test/spec/adder/*.tsv fixtures. It is the smallest grammar that is still
 // a real one — two rules, one custom token, a push and a repeat — which
 // makes it the natural end-to-end check that github.com/tabnas/support/go

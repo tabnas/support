@@ -4,11 +4,11 @@
  * @tabnas/support — shared test-support utilities for the tabnas parser
  * system.
  *
- * Every tabnas package (parser, json, jsonic, abnf, csv, ...) proves the
- * two runtimes agree by running one set of TSV fixtures from `test/spec/`
- * in both. This package is the machinery that reads those fixtures, so
+ * Every tabnas package (parser, json, jsonic, abnf, csv, ...) proves its
+ * runtimes agree by running one set of TSV fixtures from `test/spec/`
+ * in each. This package is the machinery that reads those fixtures, so
  * there is one loader with one set of rules instead of a copy per repo
- * quietly drifting from its Go twin.
+ * quietly drifting from its Go and Rust twins.
  *
  * The Go half is `github.com/tabnas/support/go`, and the two are written
  * to behave identically — same escape codec, same comment and blank-line
@@ -65,8 +65,9 @@ export type { EqualOptions, ErrorExpect } from './expect'
 export { SpecRunner, makeRunner } from './runner'
 export type { RunnerOptions } from './runner'
 
-// The divergence register: recorded TS/Go disagreements, executed by both
-// ports, where a FIXED divergence fails as loudly as a regressed one.
+// The divergence register: recorded disagreements between the ports,
+// executed by every port, where a FIXED divergence fails as loudly as a
+// regressed one.
 export {
   DivergenceRegister, makeRegister, noDivergences,
 } from './register'

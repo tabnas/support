@@ -1,10 +1,10 @@
 /* Copyright (c) 2026 tabnas, MIT License */
 'use strict'
 
-/* census.test.js — every shared fixture runs in BOTH runtimes.
+/* census.test.js — every shared fixture runs in EVERY runtime.
  *
- * `test/spec/adder/` needs no check: both runtimes discover it by
- * directory listing, so a fixture added there runs in both without
+ * `test/spec/adder/` needs no check: every runtime discovers it by
+ * directory listing, so a fixture added there runs in all of them without
  * anyone touching a runner.
  *
  * `test/spec/util/` and `test/spec/census/` cannot work that way — each
@@ -72,7 +72,7 @@ describe('census', () => {
   it('discovers the adder fixtures by listing, in both runtimes', () => {
     // Recorded so the asymmetry above is deliberate rather than
     // forgotten: this directory needs no census because adding a file
-    // to it runs it in both runtimes automatically.
+    // to it runs it in every runtime automatically.
     const adderDir = Path.join(SPEC, 'adder')
     const fixtures = Fs.readdirSync(adderDir).filter((n) => n.endsWith('.tsv'))
 

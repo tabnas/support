@@ -5,10 +5,10 @@
 // the expectation helpers and the table-driven test runner.
 //
 // Every tabnas package (parser, json, jsonic, abnf, csv, ...) proves its
-// two runtimes agree by running one set of TSV fixtures from test/spec/
-// in both. This package is the machinery that reads those fixtures, so
+// runtimes agree by running one set of TSV fixtures from test/spec/
+// in each. This package is the machinery that reads those fixtures, so
 // there is one loader with one set of rules instead of a copy per repo
-// quietly drifting from its TypeScript twin.
+// quietly drifting from its TypeScript and Rust twins.
 //
 // The TypeScript half is @tabnas/support, and the two are written to
 // behave identically — same escape codec, same comment and blank-line

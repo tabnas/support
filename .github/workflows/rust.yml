@@ -40,8 +40,9 @@ jobs:
         with:
           path: support
 
-      # Engine main, not a release: the crate is unpublished, so this is
-      # the only resolution there is.
+      # Engine main, not a release: rs/adder/Cargo.toml names the engine
+      # by path (tabnas-parser is on crates.io, but the committed manifest
+      # stays path-only), so this is the only resolution there is.
       - name: Clone the sibling engine
         run: git clone --depth 1 https://github.com/tabnas/parser.git parser
 

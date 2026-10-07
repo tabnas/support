@@ -597,7 +597,7 @@ its own comparator instead.
 
 ## The adder grammar
 
-A plugin, in both runtimes, holding the integer-addition grammar from the
+A plugin, in every runtime, holding the integer-addition grammar from the
 `@tabnas/parser` README:
 
 ```
@@ -608,6 +608,8 @@ add = NR [ PL add ]  -- each number adds to it; `+` repeats
 | TypeScript | Go |
 |---|---|
 | `require('@tabnas/support/adder').adder` | `github.com/tabnas/support/go/adder`: `adder.Adder`, `adder.Make()` |
+
+The Rust plugin is the private crate `tabnas-support-adder`, in `rs/adder/`.
 
 ```js
 const { Tabnas } = require('@tabnas/parser')

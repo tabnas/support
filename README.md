@@ -17,7 +17,7 @@ reads those fixtures.
 |---|---|
 | TypeScript | `@tabnas/support` in [`ts/`](ts/) |
 | Go | `github.com/tabnas/support/go` in [`go/`](go/) |
-| Rust | `tabnas-support` in [`rs/`](rs/) (unpublished; a sibling-checkout path dependency) |
+| Rust | `tabnas-support` in [`rs/`](rs/) (on crates.io; the fleet's own crates take it by path) |
 
 ## Why
 
@@ -76,8 +76,9 @@ This is test-support code; it should never reach a release artifact.
 `test/`, so it is neither installed by consumers nor reachable from
 `dist/`.
 
-**Rust.** Take it as a `[dev-dependencies]` path entry on a sibling
-checkout; a dev-dependency is never built into a release artifact.
+**Rust.** Take it as a `[dev-dependencies]` entry, with
+`cargo add --dev tabnas-support`; a dev-dependency is never built into a
+release artifact.
 
 **Go** has no `devDependencies`, and does not need them: the guarantee
 comes from the **import graph** instead of from metadata.
@@ -175,8 +176,8 @@ on. The TypeScript plugin ships in the npm package as
 
 ## Documentation
 
-- [Reference](doc/reference.md). The fixture format and the full API in
-  both languages, side by side.
+- [Reference](doc/reference.md). The fixture format and the full API,
+  TypeScript and Go side by side, then Rust.
 - [Fixture guide](test/AGENTS.md). How to write and place a fixture.
 - [Agents guide](AGENTS.md). Repository map and the rules for changing it.
 

@@ -10,10 +10,10 @@ import (
 	"testing"
 )
 
-// census_test.go — every shared fixture runs in BOTH runtimes.
+// census_test.go — every shared fixture runs in EVERY runtime.
 //
-// test/spec/adder/ needs no check: both runtimes discover it by
-// directory listing, so a fixture added there runs in both without
+// test/spec/adder/ needs no check: every runtime discovers it by
+// directory listing, so a fixture added there runs in all of them without
 // anyone touching a runner.
 //
 // test/spec/util/ and test/spec/census/ cannot work that way — each file
@@ -89,7 +89,7 @@ func censusNamesEveryFixture(t *testing.T, family string) {
 
 // TestCensusAdderIsDiscoveredByListing records that the asymmetry above
 // is deliberate rather than forgotten: the adder directory needs no
-// census because adding a file to it runs it in both runtimes.
+// census because adding a file to it runs it in every runtime.
 func TestCensusAdderIsDiscoveredByListing(t *testing.T) {
 	adderDir := filepath.Join(specDir(t), "adder")
 

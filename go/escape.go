@@ -16,7 +16,7 @@ import "strings"
 // without a second layer of quoting.
 //
 // ts/src/escape.ts implements exactly this, byte for byte. The whole point
-// of a shared fixture is that both runtimes feed their parser the same
+// of a shared fixture is that every runtime feeds its parser the same
 // source text, so any divergence here is a defect, not a preference.
 
 // Unescape decodes the fixture escape set: \n, \r, \t and \\. Any other

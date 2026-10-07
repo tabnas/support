@@ -115,7 +115,7 @@ func expectationCol(spec *File, row *Row, opts CensusOpts) (int, error) {
 
 // CatalogueDiff is what CompareCatalogues found. All three lists are
 // sorted, and empty rather than nil when there is nothing to report, so
-// the two runtimes render the same answer the same way.
+// every runtime renders the same answer the same way.
 type CatalogueDiff struct {
 	// Missing holds keys of a absent in b.
 	Missing []string
